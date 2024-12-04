@@ -15,7 +15,9 @@ class InputField extends StatelessWidget {
     required this.screenWidth,
     this.obscureText = false,
     this.suffixIcon,
-    this.controller, // Added controller to the constructor
+    this.controller,
+    required String? Function(dynamic value)
+        validator, // Added controller to the constructor
   });
 
   @override
