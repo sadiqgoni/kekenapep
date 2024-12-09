@@ -3,6 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:keke_fairshare/screens/filter_screen.dart';
+import 'package:keke_fairshare/utils/logger.dart';
+import '../widgets/route_match_card.dart';
+import '../models/fare_filter.dart';
+import 'package:keke_fairshare/widgets/filter_dialog.dart';
 
 class CheckFareScreen extends StatefulWidget {
   const CheckFareScreen({Key? key}) : super(key: key);
@@ -20,6 +24,8 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
   List<String> _landmarks = [];
   final TextEditingController _landmarkController = TextEditingController();
   bool _isLoading = false;
+  FareFilter? _currentFilter;
+  List<Map<String, dynamic>> _matchingRoutes = [];
 
   void _addLandmark() {
     if (_landmarkController.text.isNotEmpty) {
@@ -37,395 +43,471 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
   }
 
   Future<void> _generateFare() async {
-    if (_formKey.currentState!.validate() && _landmarks.length >= 3) {
-      // final fares = await FirebaseFirestore.instance.collection('fares').get();
-      // for (var fare in fares.docs) {
-      //   final fareAmount = fare['fareAmount'];
-      //   if (fareAmount is int) {
-      //     await fare.reference.update({'fareAmount': fareAmount.toDouble()});
-      //     print('Done');
-      //   }
-      //}
-
-      _formKey.currentState!.save();
-
-      setState(() => _isLoading = true);
-      try {
-        // First, validate that we have all required data
-        if (_source == null || _destination == null || _landmarks.isEmpty) {
-          throw 'Please enter all required route information';
-        }
-
-        final QuerySnapshot fareSnapshot = await _firestore
-            .collection('fares')
-            .where('status', isEqualTo: 'Approved')
-            .orderBy('submittedAt', descending: true)
-            .limit(50)
-            .get();
-
-        if (fareSnapshot.docs.isEmpty) {
-          throw 'No fare data available';
-        }
-
-        List<Map<String, dynamic>> matchingFares = [];
-
-        // Safer data extraction with null checking
-        for (var doc in fareSnapshot.docs) {
-          try {
-            final data = doc.data() as Map<String, dynamic>;
-
-            // Validate required fields exist
-            if (!data.containsKey('source') ||
-                !data.containsKey('destination') ||
-                !data.containsKey('routeTaken') ||
-                !data.containsKey('fareAmount')) {
-              continue; // Skip invalid entries
-            }
-
-            final double similarity = _calculateRouteSimilarity(
-              data['source']?.toString().toLowerCase() ?? '',
-              data['destination']?.toString().toLowerCase() ?? '',
-              List<String>.from(data['routeTaken'] ?? []),
-              _source!.toLowerCase(),
-              _destination!.toLowerCase(),
-              _landmarks,
-            );
-
-            // Only include if similarity is above threshold
-            if (similarity > 0.3) {
-              matchingFares.add({
-                'source': data['source'],
-                'destination': data['destination'],
-                'routeTaken': data['routeTaken'],
-                'fareAmount': data['fareAmount'],
-                'submittedAt': data['submittedAt'],
-                'similarity': similarity,
-              });
-            }
-          } catch (e) {
-            print('Error processing fare document: $e');
-            continue; // Skip problematic documents
-          }
-        }
-
-        // Sort by similarity
-        matchingFares
-            .sort((a, b) => b['similarity'].compareTo(a['similarity']));
-        matchingFares = matchingFares.take(10).toList();
-
-        if (matchingFares.isEmpty) {
-          throw 'No similar routes found. Try adjusting your landmarks or route.';
-        }
-
-        // Safe fare calculation
-        List<double> fares = [];
-        for (var fare in matchingFares) {
-          try {
-            double fareAmount = fare['fareAmount'] is int
-                ? fare['fareAmount']
-                : double.parse(fare['fareAmount'].toString());
-            fares.add(fareAmount);
-          } catch (e) {
-            print('Error parsing fare amount: $e');
-            continue;
-          }
-        }
-
-        if (fares.isEmpty) {
-          throw 'Unable to calculate fares from matching routes';
-        }
-
-        // Calculate average with validated fares
-        double mean = fares.reduce((a, b) => a + b) / fares.length;
-
-        // Only calculate standard deviation if we have enough fares
-        if (fares.length > 1) {
-          double stdDev = sqrt(
-              fares.map((x) => pow(x - mean, 2)).reduce((a, b) => a + b) /
-                  fares.length);
-
-          // Remove outliers
-          fares = fares.where((x) => (x - mean).abs() <= 2 * stdDev).toList();
-        }
-
-        // Recalculate average without outliers
-        double average =
-            fares.isEmpty ? mean : fares.reduce((a, b) => a + b) / fares.length;
-
-        String confidence = _calculateConfidenceLevel(matchingFares);
-
-        // Debug logging
-        print('Found ${matchingFares.length} matching fares');
-        print('Calculated average: $average');
-        print('Confidence level: $confidence');
-
-        _showFareResult(fares.map((fare) => fare.round()).toList(),
-            average.round(), confidence);
-      } catch (e) {
-        print('Error in _generateFare: $e'); // Debug logging
-
-        String errorMessage = e.toString();
-        if (!errorMessage.contains('No similar routes') &&
-            !errorMessage.contains('Please enter') &&
-            !errorMessage.contains('Unable to calculate')) {
-          errorMessage =
-              'Error calculating fare: ${e.toString()}\nPlease try adjusting your route or landmarks.';
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              errorMessage,
-              style: GoogleFonts.poppins(),
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              textColor: Colors.white,
-              onPressed: () {
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-              },
-            ),
-          ),
-        );
-      } finally {
-        setState(() => _isLoading = false);
-      }
-    } else {
+    if (!(_formKey.currentState?.validate() ?? false) || _landmarks.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please enter source, destination, and at least 3 landmarks.',
-            style: GoogleFonts.poppins(),
-          ),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Please enter source, destination, and at least 3 landmarks.')),
       );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      _formKey.currentState!.save();
+      
+      // await AppLogger.logInfo(
+      //   'CheckFare',
+      //   'Starting fare check',
+      //   additionalInfo: {
+      //     'source': _source,
+      //     'destination': _destination,
+      //     'landmarks': _landmarks,
+      //   },
+      // );
+
+      // Step 1: Get approved routes within the last 30 days
+      final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+      
+      final sourceDestQuery = await _firestore
+          .collection('fares')
+          .where('status', isEqualTo: 'Approved')
+          .where('submittedAt', isGreaterThan: thirtyDaysAgo.toIso8601String())
+          .get();
+
+      // await AppLogger.logInfo(
+      //   'CheckFare',
+      //   'Initial query complete',
+      //   additionalInfo: {'matchCount': sourceDestQuery.docs.length},
+      // );
+
+      // Step 2: Score and filter matches
+      List<Map<String, dynamic>> potentialMatches = [];
+      
+      for (var doc in sourceDestQuery.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        
+        // Initialize match score
+        double matchScore = 0;
+        double maxPossibleScore = 0;
+        
+        // Source/destination scoring (max 20 points)
+        maxPossibleScore += 20;
+        if (_isExactMatch(data['source'], _source!)) {
+          matchScore += 10;  // Increased from 5
+        } else if (_isFuzzyMatch(data['source'], _source!)) {
+          matchScore += 5;   // Increased from 3
+        }
+        
+        if (_isExactMatch(data['destination'], _destination!)) {
+          matchScore += 10;  // Increased from 5
+        } else if (_isFuzzyMatch(data['destination'], _destination!)) {
+          matchScore += 5;   // Increased from 3
+        }
+
+        // Landmark scoring (max 30 points - 10 per landmark)
+        List<String> routeLandmarks = List<String>.from(data['routeTaken'] ?? []);
+        int landmarkMatches = 0;
+        double landmarkScore = 0;
+        
+        for (String landmark in _landmarks) {
+          maxPossibleScore += 10;
+          double bestMatchForLandmark = 0;
+          
+          for (String routeLandmark in routeLandmarks) {
+            if (_isExactMatch(landmark, routeLandmark)) {
+              bestMatchForLandmark = 10;  // Increased from 3
+              landmarkMatches++;
+              break;
+            } else {
+              double similarity = _calculateLevenshteinSimilarity(
+                landmark.toLowerCase(), 
+                routeLandmark.toLowerCase()
+              );
+              bestMatchForLandmark = max(bestMatchForLandmark, similarity * 8);  // Up to 8 points for close matches
+            }
+          }
+          landmarkScore += bestMatchForLandmark;
+        }
+        matchScore += landmarkScore;
+
+        // Time-based relevance (reduce score by up to 20% based on age)
+        final submissionDate = DateTime.parse(data['submittedAt']);
+        final daysAgo = DateTime.now().difference(submissionDate).inDays;
+        double timeMultiplier = 1.0 - (daysAgo / 30) * 0.2;
+        matchScore *= timeMultiplier;
+
+        // Calculate percentage match
+        double matchPercentage = (matchScore / maxPossibleScore) * 100;
+
+        // Only include if there's a meaningful match
+        if (matchPercentage >= 40 && landmarkMatches >= 1) {  // Adjusted thresholds
+          potentialMatches.add({
+            ...data,
+            'matchScore': matchPercentage,  // Store as percentage
+          });
+        }
+      }
+
+      // await AppLogger.logInfo(
+      //   'CheckFare',
+      //   'Match scoring complete',
+      //   additionalInfo: {
+      //     'potentialMatchesCount': potentialMatches.length,
+      //   },
+      // );
+
+      // Step 3: Process matches and calculate fare
+      if (potentialMatches.isEmpty) {
+        throw 'No similar routes found. Try adjusting your route details.';
+      }
+
+      // Sort by match score
+      potentialMatches.sort((a, b) => b['matchScore'].compareTo(a['matchScore']));
+
+      // Calculate weighted average fare
+      double totalWeight = 0;
+      double weightedFareSum = 0;
+      List<double> fares = [];
+
+      for (var match in potentialMatches.take(5)) {
+        double weight = match['matchScore'] / 10.0;
+        double fare = double.parse(match['fareAmount'].toString());
+        
+        weightedFareSum += fare * weight;
+        totalWeight += weight;
+        fares.add(fare);
+      }
+
+      double estimatedFare = weightedFareSum / totalWeight;
+      double minFare = fares.reduce(min);
+      double maxFare = fares.reduce(max);
+
+      // Calculate confidence
+      String confidence = _calculateConfidence(
+        potentialMatches.take(5).toList(),
+        minFare,
+        maxFare,
+      );
+
+      // await AppLogger.logInfo(
+      //   'CheckFare',
+      //   'Fare calculation complete',
+      //   additionalInfo: {
+      //     'estimatedFare': estimatedFare,
+      //     'minFare': minFare,
+      //     'maxFare': maxFare,
+      //     'confidence': confidence,
+      //   },
+      // );
+
+      setState(() {
+        _matchingRoutes = potentialMatches;
+      });
+
+      if (_currentFilter != null) {
+        _matchingRoutes = _matchingRoutes.where((route) {
+          final routeDate = DateTime.parse(route['dateTime']);
+          
+          if (_currentFilter!.fromDate != null && 
+              routeDate.isBefore(_currentFilter!.fromDate!)) {
+            return false;
+          }
+
+          if (_currentFilter!.weatherCondition != null && 
+              route['weatherConditions'] != _currentFilter!.weatherCondition) {
+            return false;
+          }
+
+          if (_currentFilter!.trafficCondition != null && 
+              route['trafficConditions'] != _currentFilter!.trafficCondition) {
+            return false;
+          }
+
+          if (_currentFilter!.passengerLoad != null && 
+              route['passengerLoad'] != _currentFilter!.passengerLoad) {
+            return false;
+          }
+
+          if (_currentFilter!.rushHourStatus != null && 
+              route['rushHourStatus'] != _currentFilter!.rushHourStatus) {
+            return false;
+          }
+
+          return true;
+        }).toList();
+      }
+
+      _showFareResult(
+        [minFare.round(), maxFare.round()],
+        estimatedFare.round(),
+        confidence,
+      );
+
+    } catch (e) {
+      // await AppLogger.logError(
+      //   'CheckFare',
+      //   'Error generating fare',
+      //   additionalInfo: {'error': e.toString()},
+      // );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
-// Helper function to calculate confidence level with better accuracy
-  String _calculateConfidenceLevel(List<Map<String, dynamic>> matches) {
-    if (matches.isEmpty) return 'Low';
+  bool _isExactMatch(String str1, String str2) {
+    str1 = str1.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+    str2 = str2.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+    
+    // Check for exact match
+    if (str1 == str2) return true;
+    
+    // Check for match with common variations
+    final variations1 = _getCommonVariations(str1);
+    final variations2 = _getCommonVariations(str2);
+    
+    return variations1.any((v1) => variations2.contains(v1));
+  }
 
-    double highestSimilarity = matches.first['similarity'] as double;
-    int matchCount = matches.length;
+  bool _isFuzzyMatch(String str1, String str2) {
+    str1 = str1.toLowerCase().trim();
+    str2 = str2.toLowerCase().trim();
+    
+    // Check if one string contains the other
+    if (str1.contains(str2) || str2.contains(str1)) {
+      return true;
+    }
+    
+    // Calculate similarity
+    double similarity = _calculateLevenshteinSimilarity(str1, str2);
+    
+    // More lenient threshold for longer strings
+    double threshold = str1.length > 10 || str2.length > 10 ? 0.7 : 0.8;
+    
+    return similarity > threshold;
+  }
 
-    if (matchCount >= 8 && highestSimilarity > 0.7) {
+  String _calculateConfidence(
+      List<Map<String, dynamic>> topMatches,
+      double minFare,
+      double maxFare) {
+    // Calculate confidence based on:
+    // 1. Number of good matches
+    // 2. Fare range spread
+    // 3. Match scores
+    
+    double fareSpread = (maxFare - minFare) / maxFare;
+    double avgMatchScore = topMatches.map((m) => m['matchScore']).reduce((a, b) => a + b) / topMatches.length;
+    
+    if (topMatches.length >= 4 && fareSpread < 0.2 && avgMatchScore > 6) {
       return 'High';
-    } else if (matchCount >= 5 && highestSimilarity > 0.5) {
+    } else if (topMatches.length >= 3 && fareSpread < 0.3 && avgMatchScore > 4) {
       return 'Medium';
     } else {
       return 'Low';
     }
   }
 
-// Improved route similarity calculation with better error handling
-  double _calculateRouteSimilarity(
-    String source1,
-    String dest1,
-    List<String> route1,
-    String source2,
-    String dest2,
-    List<String> route2,
-  ) {
-    try {
-      double score = 0.0;
+  void _showFareResult(List<int> fares, int average, String confidence) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.9,
+        builder: (_, controller) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                'Estimated Fare',
+                style: GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Card(
+                color: Colors.yellow[50],
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Text(
+                        '₦$average',
+                        style: GoogleFonts.poppins(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.yellow[900],
+                        ),
+                      ),
+                      Text(
+                        'Range: ₦${fares[0]} - ₦${fares[1]}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildConfidenceIndicator(confidence),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Recent Similar Routes',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  TextButton.icon(
+                    icon: Icon(Icons.filter_list, color: Colors.black),
+                    label: Text('Filter', style: TextStyle(color: Colors.black)),
+                    onPressed: _showFilterDialog,
+                  ),
+                ],
+              ),
+              Expanded(
+                child: ListView.builder(
+                  controller: controller,
+                  itemCount: _matchingRoutes.length,
+                  itemBuilder: (context, index) {
+                    final route = _matchingRoutes[index];
+                    return RouteMatchCard(
+                      route: route,
+                      matchScore: route['matchScore'] / 10,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-      // Validate inputs
-      if (source1.isEmpty ||
-          dest1.isEmpty ||
-          source2.isEmpty ||
-          dest2.isEmpty) {
-        return 0.0;
-      }
+  void _showFilterDialog() async {
+    final result = await showDialog<FareFilter>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: FilterDialog(currentFilter: _currentFilter),
+        ),
+      ),
+    );
 
-      // Source and destination matching
-      double sourceSimScore = _calculateLevenshteinSimilarity(source1, source2);
-      double destSimScore = _calculateLevenshteinSimilarity(dest1, dest2);
-
-      score += sourceSimScore * 0.3;
-      score += destSimScore * 0.3;
-
-      // Landmark matching with validation
-      if (route1.isNotEmpty && route2.isNotEmpty) {
-        final route1Lower = route1.map((e) => e.toLowerCase()).toList();
-        final route2Lower = route2.map((e) => e.toLowerCase()).toList();
-
-        int matchedLandmarks = 0;
-        for (final landmark in route2Lower) {
-          if (landmark.isEmpty) continue;
-
-          double bestMatch = 0.0;
-          for (final routeLandmark in route1Lower) {
-            if (routeLandmark.isEmpty) continue;
-
-            double similarity =
-                _calculateLevenshteinSimilarity(landmark, routeLandmark);
-            bestMatch = max(bestMatch, similarity);
-          }
-          if (bestMatch > 0.7) {
-            matchedLandmarks++;
-          }
-        }
-
-        if (route2Lower.isNotEmpty) {
-          score += (matchedLandmarks / route2Lower.length) * 0.4;
-        }
-      }
-      print(
-          'Source similarity: $sourceSimScore, Destination similarity: $destSimScore, Route similarity: $score');
-
-      return score;
-    } catch (e) {
-      print('Error calculating route similarity: $e');
-      return 0.0; // Return minimum score on error
+    if (result != null) {
+      setState(() {
+        _currentFilter = result;
+      });
+      _generateFare();
     }
   }
 
-// Helper function to calculate string similarity
-  double _calculateLevenshteinSimilarity(String s1, String s2) {
-    int distance = _levenshteinDistance(s1, s2);
-    int maxLength = max(s1.length, s2.length);
-    return maxLength == 0 ? 1.0 : 1.0 - (distance / maxLength);
+  Widget _buildConfidenceIndicator(String confidence) {
+    Color confidenceColor = confidence == 'High'
+        ? Colors.green
+        : confidence == 'Medium'
+            ? Colors.orange
+            : Colors.red;
+
+    return Row(
+      children: [
+        Icon(Icons.info_outline, size: 16, color: confidenceColor),
+        const SizedBox(width: 4),
+        Text(
+          'Confidence: $confidence',
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: confidenceColor,
+          ),
+        ),
+      ],
+    );
   }
 
-  int _levenshteinDistance(String s1, String s2) {
-    if (s1.isEmpty) return s2.length;
-    if (s2.isEmpty) return s1.length;
+  double _calculateLevenshteinSimilarity(String s1, String s2) {
+    if (s1.isEmpty) return s2.isEmpty ? 1.0 : 0.0;
+    if (s2.isEmpty) return 0.0;
+
+    // Convert to lowercase for case-insensitive comparison
+    s1 = s1.toLowerCase();
+    s2 = s2.toLowerCase();
 
     List<List<int>> matrix = List.generate(
       s1.length + 1,
       (i) => List.generate(s2.length + 1, (j) => 0),
     );
 
-    for (int i = 0; i <= s1.length; i++) {
-      matrix[i][0] = i;
-    }
-    for (int j = 0; j <= s2.length; j++) {
-      matrix[0][j] = j;
-    }
+    // Initialize first row and column
+    for (int i = 0; i <= s1.length; i++) matrix[i][0] = i;
+    for (int j = 0; j <= s2.length; j++) matrix[0][j] = j;
 
+    // Fill in the rest of the matrix
     for (int i = 1; i <= s1.length; i++) {
       for (int j = 1; j <= s2.length; j++) {
         int cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
-        matrix[i][j] = min(
-          min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1),
-          matrix[i - 1][j - 1] + cost,
-        );
+        matrix[i][j] = [
+          matrix[i - 1][j] + 1, // deletion
+          matrix[i][j - 1] + 1, // insertion
+          matrix[i - 1][j - 1] + cost, // substitution
+        ].reduce(min);
       }
     }
 
-    return matrix[s1.length][s2.length];
+    // Calculate similarity as a value between 0 and 1
+    int maxLength = max(s1.length, s2.length);
+    return 1 - (matrix[s1.length][s2.length] / maxLength);
   }
 
-// Show results with improved UI
-  void _showFareResult(List<int> fares, int average, String confidence) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Fare Estimate',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Route Details:',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-                Text('From: $_source', style: GoogleFonts.poppins()),
-                Text('To: $_destination', style: GoogleFonts.poppins()),
-                const SizedBox(height: 16),
-                Text(
-                  'Estimated Fare Range:',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  '₦${fares.reduce(min)} - ₦${fares.reduce(max)}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    color: Colors.blue,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Recommended Fare:',
-                  style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  '₦$average',
-                  style: GoogleFonts.poppins(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      size: 16,
-                      color: confidence == 'High'
-                          ? Colors.green
-                          : confidence == 'Medium'
-                              ? Colors.orange
-                              : Colors.red,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Confidence: $confidence',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: confidence == 'High'
-                            ? Colors.green
-                            : confidence == 'Medium'
-                                ? Colors.orange
-                                : Colors.red,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Based on ${fares.length} recent similar trips',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              child: Text('Apply Filters',
-                  style: GoogleFonts.poppins(color: Colors.blue)),
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => FareFilterScreen(
-                      source: _source!,
-                      destination: _destination!,
-                      landmarks: _landmarks,
-                    ),
-                  ),
-                );
-              },
-            ),
-            TextButton(
-              child: Text('Close',
-                  style: GoogleFonts.poppins(color: Colors.yellow[700])),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        );
-      },
-    );
+  Set<String> _getCommonVariations(String text) {
+    final Set<String> variations = {text};
+    
+    // Add common abbreviations and variations
+    variations.add(text.replaceAll('road', 'rd'));
+    variations.add(text.replaceAll('rd', 'road'));
+    variations.add(text.replaceAll('street', 'st'));
+    variations.add(text.replaceAll('st', 'street'));
+    variations.add(text.replaceAll('junction', 'jcn'));
+    variations.add(text.replaceAll('jcn', 'junction'));
+    
+    // Remove special characters
+    variations.add(text.replaceAll(RegExp(r'[^\w\s]'), ''));
+    
+    return variations;
   }
 
   @override

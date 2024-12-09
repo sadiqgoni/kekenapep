@@ -29,13 +29,12 @@ class FareSubmission {
     required this.status,
   });
 
-  // Convert to Map for Firebase
   Map<String, dynamic> toMap() {
     return {
-      'source': source,
-      'destination': destination,
+      'source': source.toLowerCase().trim(),
+      'destination': destination.toLowerCase().trim(),
       'fareAmount': fareAmount,
-      'routeTaken': routeTaken,
+      'routeTaken': routeTaken.map((l) => l.toLowerCase().trim()).toList(),
       'dateTime': dateTime.toIso8601String(),
       'weatherConditions': weatherConditions,
       'trafficConditions': trafficConditions,
@@ -45,21 +44,21 @@ class FareSubmission {
       'userId': userId,
       'status': status,
       'submittedAt': submittedAt.toIso8601String(),
-      'year': dateTime.year,
-      'month': dateTime.month,
-      'day': dateTime.day,
-      'hour': dateTime.hour,
-      'weekday': dateTime.weekday,
+      'metadata': {
+        'year': dateTime.year,
+        'month': dateTime.month,
+        'day': dateTime.day,
+        'hour': dateTime.hour,
+        'weekday': dateTime.weekday,
+      }
     };
   }
 
-  // Create from Firebase Map
   factory FareSubmission.fromMap(Map<String, dynamic> map) {
     return FareSubmission(
-      status: map['status'],
       source: map['source'],
       destination: map['destination'],
-      fareAmount: map['fareAmount'],
+      fareAmount: map['fareAmount'].toDouble(),
       routeTaken: List<String>.from(map['routeTaken']),
       dateTime: DateTime.parse(map['dateTime']),
       weatherConditions: map['weatherConditions'],
@@ -69,6 +68,28 @@ class FareSubmission {
       rushHourStatus: map['rushHourStatus'],
       userId: map['userId'],
       submittedAt: DateTime.parse(map['submittedAt']),
+      status: map['status'],
+    );
+  }
+
+  FareSubmission copyWith({
+    String? status,
+    String? fareContext,
+  }) {
+    return FareSubmission(
+      source: source,
+      destination: destination,
+      fareAmount: fareAmount,
+      routeTaken: routeTaken,
+      dateTime: dateTime,
+      weatherConditions: weatherConditions,
+      trafficConditions: trafficConditions,
+      passengerLoad: passengerLoad,
+      fareContext: fareContext ?? this.fareContext,
+      rushHourStatus: rushHourStatus,
+      userId: userId,
+      submittedAt: submittedAt,
+      status: status ?? this.status,
     );
   }
 }

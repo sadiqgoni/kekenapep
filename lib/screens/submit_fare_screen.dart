@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:keke_fairshare/models/faresubmission.dart';
+import 'package:keke_fairshare/services/fare_service.dart';
 
 class SubmitFareScreen extends StatefulWidget {
   const SubmitFareScreen({super.key});
@@ -44,6 +45,8 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
     '4 (One side of driver)',
     '5 (Other side of driver)',
   ];
+
+  final FareService _fareService = FareService();
 
   Future<void> _selectTime(BuildContext context) async {
     final TimeOfDay? picked = await showTimePicker(
@@ -101,115 +104,74 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
   }
 
   Future<void> _submitFare() async {
-    if (_formKey.currentState!.validate()) {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
       _formKey.currentState!.save();
 
-      if (_timeOfTravel == null || _dateOfTravel == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Please select both date and time',
-                style: GoogleFonts.poppins()),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      setState(() {
-        _isSubmitting = true;
-      });
-
-      try {
-        // Create DateTime combining date and time
-        final DateTime combinedDateTime = DateTime(
+      final submission = FareSubmission(
+        source: _source!,
+        destination: _destination!,
+        fareAmount: _fareAmount!,
+        routeTaken: _routeTaken,
+        dateTime: DateTime(
           _dateOfTravel!.year,
           _dateOfTravel!.month,
           _dateOfTravel!.day,
           _timeOfTravel!.hour,
           _timeOfTravel!.minute,
-        );
+        ),
+        weatherConditions: _weatherConditions!,
+        trafficConditions: _trafficConditions!,
+        passengerLoad: _passengerLoad!,
+        fareContext: _fareContext,
+        rushHourStatus: _rushHourMessage,
+        userId: _auth.currentUser!.uid,
+        submittedAt: DateTime.now(),
+        status: 'Pending',
+      );
 
-        // Create FareSubmission object
-        final submission = FareSubmission(
-          source: _source!,
-          destination: _destination!,
-          fareAmount: _fareAmount!,
-          routeTaken: _routeTaken,
-          dateTime: combinedDateTime,
-          weatherConditions: _weatherConditions!,
-          trafficConditions: _trafficConditions!,
-          passengerLoad: _passengerLoad!,
-          fareContext: _fareContext!,
-          rushHourStatus: _rushHourMessage,
-          userId: _auth.currentUser!.uid,
-          submittedAt: DateTime.now(),
-          status: 'Pending',
-        );
+      await _fareService.submitFare(submission);
 
-        // Add to Firestore with proper collections and subcollections
-        await _firestore.runTransaction((transaction) async {
-          // Add to main fares collection
-          final fareRef = _firestore.collection('fares').doc();
-          transaction.set(fareRef, submission.toMap());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fare submitted successfully!',
+              style: GoogleFonts.poppins()),
+          backgroundColor: Colors.green,
+        ),
+      );
 
-          // Add to user's submissions subcollection
-          final userRef = _firestore
-              .collection('users')
-              .doc(_auth.currentUser!.uid)
-              .collection('submissions')
-              .doc(fareRef.id);
-          transaction.set(userRef, submission.toMap());
+      _formKey.currentState!.reset();
+      _clearForm();
 
-          // Add to routes collection for route analysis
-          final routeRef =
-              _firestore.collection('routes').doc('${_source}_$_destination');
-          transaction.set(
-            routeRef,
-            {
-              'submissions': FieldValue.arrayUnion([fareRef.id]),
-              'updatedAt': DateTime.now().toIso8601String(),
-              'source': _source,
-              'destination': _destination,
-            },
-            SetOptions(merge: true),
-          );
-        });
-
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Fare submitted successfully!',
-                style: GoogleFonts.poppins()),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        // Clear form
-        _formKey.currentState!.reset();
-        setState(() {
-          _routeTaken.clear();
-          _timeOfTravel = null;
-          _dateOfTravel = null;
-          _weatherConditions = null;
-          _trafficConditions = null;
-          _passengerLoad = null;
-          _fareContext = null;
-          _rushHourMessage = '';
-        });
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error submitting fare: ${e.toString()}',
-                style: GoogleFonts.poppins()),
-            backgroundColor: Colors.red,
-          ),
-        );
-      } finally {
-        setState(() {
-          _isSubmitting = false;
-        });
-      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error submitting fare: ${e.toString()}',
+              style: GoogleFonts.poppins()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isSubmitting = false);
     }
+  }
+
+  void _clearForm() {
+    setState(() {
+      _routeTaken.clear();
+      _timeOfTravel = null;
+      _dateOfTravel = null;
+      _weatherConditions = null;
+      _trafficConditions = null;
+      _passengerLoad = null;
+      _fareContext = null;
+      _rushHourMessage = '';
+    });
   }
 
   @override
