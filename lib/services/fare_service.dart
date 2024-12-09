@@ -3,10 +3,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/faresubmission.dart';
 import '../utils/logger.dart';
 import '../models/fare_filter.dart';
+import './user_stats_service.dart';
 
 class FareService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final UserStatsService _userStatsService = UserStatsService();
 
   Future<String> submitFare(FareSubmission submission) async {
     try {
@@ -48,6 +50,9 @@ class FareService {
       // Commit the batch
       await batch.commit();
 
+      // Award points for submission
+      await _userStatsService.addPoints(_auth.currentUser!.uid, 'submission');
+
       await AppLogger.logInfo(
         'FareSubmission',
         'Fare submitted successfully',
@@ -55,6 +60,7 @@ class FareService {
           'fareId': fareRef.id,
           'userId': _auth.currentUser!.uid,
           'route': routeId,
+          'pointsAwarded': UserStatsService.POINTS_PER_SUBMISSION,
         },
       );
 
@@ -66,6 +72,54 @@ class FareService {
         additionalInfo: {'error': e.toString()},
       );
       throw 'Failed to submit fare: ${e.toString()}';
+    }
+  }
+
+  Future<void> updateFareStatus(String fareId, String status) async {
+    try {
+      final batch = _firestore.batch();
+      
+      // Update main fare document
+      final fareRef = _firestore.collection('fares').doc(fareId);
+      batch.update(fareRef, {'status': status});
+
+      // Get the fare document to get the user ID
+      final fareDoc = await fareRef.get();
+      final userId = fareDoc.data()?['userId'];
+
+      if (userId != null) {
+        // Update user's submission status
+        final userSubmissionRef = _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('submissions')
+            .doc(fareId);
+        batch.update(userSubmissionRef, {'status': status});
+
+        // If the status is 'Approved', award bonus points
+        if (status == 'Approved') {
+          await _userStatsService.addPoints(userId, 'approved');
+          
+          await AppLogger.logInfo(
+            'FareApproval',
+            'Bonus points awarded for approved submission',
+            additionalInfo: {
+              'fareId': fareId,
+              'userId': userId,
+              'bonusPoints': UserStatsService.BONUS_POINTS_APPROVED,
+            },
+          );
+        }
+      }
+
+      await batch.commit();
+    } catch (e) {
+      await AppLogger.logError(
+        'FareService',
+        'Error updating fare status',
+        additionalInfo: {'error': e.toString()},
+      );
+      throw 'Failed to update fare status: ${e.toString()}';
     }
   }
 

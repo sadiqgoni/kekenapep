@@ -6,6 +6,7 @@ import 'package:keke_fairshare/screens/fare_history.dart';
 import 'package:keke_fairshare/screens/submit_fare_screen.dart';
 import 'package:keke_fairshare/screens/check_fare_screen.dart';
 import 'package:keke_fairshare/screens/profile_screen.dart';
+import '../services/user_stats_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,6 +18,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final UserStatsService _statsService = UserStatsService();
 
   final List<Map<String, dynamic>> _pages = [
     {'title': 'Home', 'icon': Icons.home},
@@ -82,13 +84,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildWelcomeBanner() {
     return Container(
-      padding: const EdgeInsets.all(24.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
       decoration: BoxDecoration(
         color: Colors.yellow[50],
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(30),
           bottomRight: Radius.circular(30),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,25 +106,154 @@ class _HomeScreenState extends State<HomeScreen> {
             stream: _auth.authStateChanges(),
             builder: (context, snapshot) {
               final userName = snapshot.data?.displayName ?? 'Guest';
-              return Text(
-                'Welcome, $userName!',
-                style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
+              return Row(
+                children: [
+                  Text(
+                    'Hello, ',
+                    style: GoogleFonts.poppins(
+                      fontSize: 28,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      userName,
+                      style: GoogleFonts.poppins(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.yellow[900],
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               );
             },
           ),
-          const SizedBox(height: 8),
-          Text(
-            'What would you like to do today?',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              color: Colors.black54,
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: Colors.yellow[100]!),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.yellow[100],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.lightbulb_outline,
+                    color: Colors.yellow[800],
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Quick Tip',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.yellow[900],
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Earn 2 points for each submission and 3 bonus points when approved!',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
+          const SizedBox(height: 16),
+          StreamBuilder<Map<String, dynamic>>(
+            stream: Stream.periodic(const Duration(seconds: 30))
+                .asyncMap((_) => _statsService.getUserStats()),
+            initialData: const {'points': 0, 'totalSubmissions': 0},
+            builder: (context, snapshot) {
+              final stats = snapshot.data!;
+              return Row(
+                children: [
+                  _buildStatCard(
+                    'Total Submissions',
+                    '${stats['totalSubmissions']}',
+                    Icons.bar_chart,
+                    Colors.blue,
+                  ),
+                  const SizedBox(width: 12),
+                  _buildStatCard(
+                    'Your Points',
+                    '${stats['points']}',
+                    Icons.star,
+                    Colors.amber,
+                    subtitle: '+${UserStatsService.POINTS_PER_SUBMISSION} per submission',
+                  ),
+                ],
+              );
+            },
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String label, String value, IconData icon, Color color, {String? subtitle}) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: Colors.yellow[100]!),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: GoogleFonts.poppins(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  color: Colors.green[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -399,7 +399,7 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
                     final route = _matchingRoutes[index];
                     return RouteMatchCard(
                       route: route,
-                      matchScore: route['matchScore'] / 10,
+                      matchScore: route['matchScore'],
                     );
                   },
                 ),
