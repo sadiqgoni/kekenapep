@@ -13,44 +13,74 @@ class FareService {
   Future<String> submitFare(FareSubmission submission) async {
     try {
       final userId = _auth.currentUser!.uid;
-      
+
       // Ensure user stats are initialized
       await _userStatsService.initializeUserStats(userId);
-      
+
       // Start a batch write
       final batch = _firestore.batch();
-      
-      // Create main fare document
+
+      // Create fare document with proper structure
       final fareRef = _firestore.collection('fares').doc();
-      final fareData = submission.toMap();
+      final fareData = {
+        ...submission.toMap(),
+        'metadata': {
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'status': 'pending',
+          'reviewedBy': null,
+          'reviewedAt': null,
+        },
+        'submitter': {
+          'uid': userId,
+          'timestamp': FieldValue.serverTimestamp(),
+        },
+      };
       batch.set(fareRef, fareData);
 
-      // Add to user's submissions
+      // Add to user's submissions subcollection
       final userSubmissionRef = _firestore
           .collection('users')
           .doc(userId)
           .collection('submissions')
           .doc(fareRef.id);
-      batch.set(userSubmissionRef, {
-        'fareRef': fareRef.id,
-        'submittedAt': submission.submittedAt.toIso8601String(),
-        'status': submission.status,
-      });
 
-      // Update routes collection
-      final routeId = _generateRouteId(submission.source, submission.destination);
-      final routeRef = _firestore.collection('routes').doc(routeId);
-      
-      batch.set(routeRef, {
+      batch.set(userSubmissionRef, {
+        'fareId': fareRef.id,
         'source': submission.source,
         'destination': submission.destination,
-        'submissions': FieldValue.arrayUnion([fareRef.id]),
-        'lastUpdated': FieldValue.serverTimestamp(),
+        'amount': submission.fareAmount,
+        'status': 'pending',
+        'submittedAt': FieldValue.serverTimestamp(),
         'metadata': {
-          'popularLandmarks': FieldValue.arrayUnion(submission.routeTaken),
-          'peakHours': FieldValue.arrayUnion([submission.dateTime.hour]),
+          'routeTaken': submission.routeTaken,
+          'dateTime': submission.dateTime.toIso8601String(),
         }
-      }, SetOptions(merge: true));
+      });
+
+      // Update routes collection with proper structure
+      final routeId =
+          _generateRouteId(submission.source, submission.destination);
+      final routeRef = _firestore.collection('routes').doc(routeId);
+
+      batch.set(
+          routeRef,
+          {
+            'source': submission.source,
+            'destination': submission.destination,
+            'metadata': {
+              'submissions': FieldValue.arrayUnion([fareRef.id]),
+              'lastUpdated': FieldValue.serverTimestamp(),
+              'popularLandmarks': FieldValue.arrayUnion(submission.routeTaken),
+              'peakHours': FieldValue.arrayUnion([submission.dateTime.hour]),
+            },
+            'stats': {
+              'totalSubmissions': FieldValue.increment(1),
+              'averageAmount': null, // Will be calculated by Cloud Function
+              'lastSubmissionAt': FieldValue.serverTimestamp(),
+            }
+          },
+          SetOptions(merge: true));
 
       // Commit the batch
       await batch.commit();
@@ -58,6 +88,7 @@ class FareService {
       // Award points for submission
       await _userStatsService.addPoints(userId, 'submission');
 
+      // Log the submission
       await AppLogger.logInfo(
         'FareSubmission',
         'Fare submitted successfully',
@@ -85,34 +116,56 @@ class FareService {
       // Get the fare document first to check current status
       final fareRef = _firestore.collection('fares').doc(fareId);
       final fareDoc = await fareRef.get();
-      
+
       if (!fareDoc.exists) {
         throw 'Fare document not found';
       }
 
-      final currentStatus = fareDoc.data()?['status'];
-      final userId = fareDoc.data()?['userId'];
+      final currentStatus = fareDoc.data()?['metadata']?['status'];
+      final userId = fareDoc.data()?['submitter']?['uid'];
+      final reviewerId = _auth.currentUser?.uid;
 
-      // Only proceed if there's a status change and we have a userId
-      if (currentStatus != status && userId != null) {
+      // Only proceed if there's a status change and we have required IDs
+      if (currentStatus != status && userId != null && reviewerId != null) {
         final batch = _firestore.batch();
-        
+
         // Update main fare document
         batch.update(fareRef, {
-          'status': status,
-          'lastUpdated': FieldValue.serverTimestamp(),
+          'metadata.status': status,
+          'metadata.updatedAt': FieldValue.serverTimestamp(),
+          'metadata.reviewedBy': reviewerId,
+          'metadata.reviewedAt': FieldValue.serverTimestamp(),
         });
 
-        // Update user's submission status
+        // Update user's submission
         final userSubmissionRef = _firestore
             .collection('users')
             .doc(userId)
             .collection('submissions')
             .doc(fareId);
-        
+
         batch.update(userSubmissionRef, {
           'status': status,
-          'lastUpdated': FieldValue.serverTimestamp(),
+          'reviewedAt': FieldValue.serverTimestamp(),
+          'reviewedBy': reviewerId,
+        });
+
+        // Add review record
+        final reviewRef = _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('submissions')
+            .doc(fareId)
+            .collection('reviews')
+            .doc();
+
+        batch.set(reviewRef, {
+          'status': status,
+          'reviewerId': reviewerId,
+          'timestamp': FieldValue.serverTimestamp(),
+          'metadata': {
+            'previousStatus': currentStatus,
+          }
         });
 
         // Commit the batch first
@@ -121,13 +174,14 @@ class FareService {
         // If the status is being changed to 'Approved', award bonus points
         if (status == 'Approved' && currentStatus != 'Approved') {
           await _userStatsService.addPoints(userId, 'approved');
-          
+
           await AppLogger.logInfo(
             'FareApproval',
             'Bonus points awarded for approved submission',
             additionalInfo: {
               'fareId': fareId,
               'userId': userId,
+              'reviewerId': reviewerId,
               'bonusPoints': UserStatsService.BONUS_POINTS_APPROVED,
               'previousStatus': currentStatus,
             },
@@ -149,8 +203,8 @@ class FareService {
   }
 
   String _generateRouteId(String source, String destination) {
-    return '${source.toLowerCase().trim()}_${destination.toLowerCase().trim()}'
-        .replaceAll(RegExp(r'[^a-z0-9_]'), '');
+    return '${source.toLowerCase()}_${destination.toLowerCase()}'
+        .replaceAll(' ', '_');
   }
 
   Future<List<FareSubmission>> getUserSubmissions() async {
@@ -166,9 +220,9 @@ class FareService {
       for (var doc in submissions.docs) {
         final fareDoc = await _firestore
             .collection('fares')
-            .doc(doc.data()['fareRef'])
+            .doc(doc.data()['fareId'])
             .get();
-        
+
         if (fareDoc.exists) {
           fares.add(FareSubmission.fromMap(fareDoc.data()!));
         }
@@ -194,26 +248,30 @@ class FareService {
     try {
       Query query = _firestore
           .collection('fares')
-          .where('status', isEqualTo: 'Approved')
+          .where('metadata.status', isEqualTo: 'Approved')
           .orderBy('submittedAt', descending: true)
           .limit(10);
 
       if (source != null) {
-        query = query.where('source', isGreaterThanOrEqualTo: source.toLowerCase())
-            .where('source', isLessThanOrEqualTo: '${source.toLowerCase()}\uf8ff');
+        query = query
+            .where('source', isGreaterThanOrEqualTo: source.toLowerCase())
+            .where('source',
+                isLessThanOrEqualTo: '${source.toLowerCase()}\uf8ff');
       }
 
       if (filter?.fromDate != null) {
-        query = query.where('dateTime', 
+        query = query.where('dateTime',
             isGreaterThanOrEqualTo: filter!.fromDate!.toIso8601String());
       }
 
       if (filter?.weatherCondition != null) {
-        query = query.where('weatherConditions', isEqualTo: filter!.weatherCondition);
+        query = query.where('weatherConditions',
+            isEqualTo: filter!.weatherCondition);
       }
 
       if (filter?.trafficCondition != null) {
-        query = query.where('trafficConditions', isEqualTo: filter!.trafficCondition);
+        query = query.where('trafficConditions',
+            isEqualTo: filter!.trafficCondition);
       }
 
       if (filter?.passengerLoad != null) {
@@ -221,13 +279,15 @@ class FareService {
       }
 
       if (filter?.rushHourStatus != null) {
-        query = query.where('rushHourStatus', isEqualTo: filter!.rushHourStatus);
+        query =
+            query.where('rushHourStatus', isEqualTo: filter!.rushHourStatus);
       }
 
       final querySnapshot = await query.get();
-      
+
       return querySnapshot.docs
-          .map((doc) => FareSubmission.fromMap(doc.data() as Map<String, dynamic>))
+          .map((doc) =>
+              FareSubmission.fromMap(doc.data() as Map<String, dynamic>))
           .toList();
     } catch (e) {
       await AppLogger.logError(
@@ -238,4 +298,4 @@ class FareService {
       throw 'Failed to search fares: ${e.toString()}';
     }
   }
-} 
+}

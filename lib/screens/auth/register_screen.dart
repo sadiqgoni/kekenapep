@@ -41,6 +41,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         User? user = await authService.registerWithEmailAndPassword(
           _emailController.text.trim(),
           _passwordController.text.trim(),
+          _fullNameController.text.trim(),
         );
         if (user != null) {
           // Update user profile with full name

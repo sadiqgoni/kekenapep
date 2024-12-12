@@ -165,55 +165,32 @@ class _HomeScreenState extends State<HomeScreen> {
             stream: FirebaseFirestore.instance
                 .collection('users')
                 .doc(FirebaseAuth.instance.currentUser!.uid)
+                .collection('statistics')
+                .doc('overview')
                 .snapshots(),
             builder: (context, snapshot) {
               // Handle loading state
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Center(
                   child: CircularProgressIndicator(
-                    color: Colors.blue,
+                    color: Colors.yellow[700],
                   ),
                 );
               }
 
-              // Handle no data or error state
-              if (!snapshot.hasData || !snapshot.data!.exists) {
-                return Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildAnimatedStatCard(
-                            'Total Submissions',
-                            '0',
-                            Icons.bar_chart,
-                            Colors.blue,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildAnimatedStatCard(
-                            'Your Points',
-                            '0',
-                            Icons.stars,
-                            Colors.amber,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+              // Handle error state
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text(
+                    'Error loading statistics',
+                    style: TextStyle(color: Colors.red),
+                  ),
                 );
               }
 
-              // Safely extract data
-              final data = snapshot.data!.data() as Map<String, dynamic>?;
-
-              // Ensure default values
-              final stats = {
-                'points': data?['points'] ?? 0,
-                'totalSubmissions': data?['totalSubmissions'] ?? 0
-              };
-
+              // Get the statistics data
+              final stats = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+              
               return Column(
                 children: [
                   Row(
@@ -221,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Expanded(
                         child: _buildAnimatedStatCard(
                           'Total Submissions',
-                          '${stats['totalSubmissions']}',
+                          '${stats['totalSubmissions'] ?? 0}',
                           Icons.bar_chart,
                           Colors.blue,
                         ),
@@ -230,13 +207,35 @@ class _HomeScreenState extends State<HomeScreen> {
                       Expanded(
                         child: _buildAnimatedStatCard(
                           'Your Points',
-                          '${stats['points']}',
+                          '${stats['points'] ?? 0}',
                           Icons.stars,
                           Colors.amber,
                         ),
                       ),
                     ],
-                  )
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildAnimatedStatCard(
+                          'Approved',
+                          '${stats['approvedSubmissions'] ?? 0}',
+                          Icons.check_circle_outline,
+                          Colors.green,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildAnimatedStatCard(
+                          'Pending',
+                          '${stats['pendingSubmissions'] ?? 0}',
+                          Icons.pending_outlined,
+                          Colors.orange,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               );
             },
