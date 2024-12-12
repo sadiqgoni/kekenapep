@@ -127,9 +127,9 @@ class _HomeScreenState extends State<HomeScreen> {
           StreamBuilder<User?>(
             stream: _auth.authStateChanges(),
             builder: (context, snapshot) {
-              // if (snapshot.connectionState == ConnectionState.waiting) {
-              //   return const ShimmerLoading();
-              // }
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const ShimmerLoading();
+              }
               final userName = snapshot.data?.displayName ?? 'Guest';
               return Row(
                 children: [
@@ -171,16 +171,19 @@ class _HomeScreenState extends State<HomeScreen> {
             builder: (context, snapshot) {
               // Handle loading state
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(
-                  child: CircularProgressIndicator(
-                    color: Colors.yellow[700],
-                  ),
-                );
+                return const ShimmerLoading();
               }
+              // if (snapshot.connectionState == ConnectionState.waiting) {
+              //   return Center(
+              //     child: CircularProgressIndicator(
+              //       color: Colors.yellow[700],
+              //     ),
+              //   );
+              // }
 
               // Handle error state
               if (snapshot.hasError) {
-                return Center(
+                return const Center(
                   child: Text(
                     'Error loading statistics',
                     style: TextStyle(color: Colors.red),
@@ -189,8 +192,9 @@ class _HomeScreenState extends State<HomeScreen> {
               }
 
               // Get the statistics data
-              final stats = snapshot.data?.data() as Map<String, dynamic>? ?? {};
-              
+              final stats =
+                  snapshot.data?.data() as Map<String, dynamic>? ?? {};
+
               return Column(
                 children: [
                   Row(
@@ -552,17 +556,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// class ShimmerLoading extends StatelessWidget {
-//   const ShimmerLoading({super.key});
+class ShimmerLoading extends StatelessWidget {
+  const ShimmerLoading({super.key});
 
-//   @override
-//   Widget build(BuildContext context) {
-//     return Container(
-//       height: 30,
-//       decoration: BoxDecoration(
-//         color: Colors.grey[200],
-//         borderRadius: BorderRadius.circular(8),
-//       ),
-//     );
-//   }
-// }
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 30,
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+}

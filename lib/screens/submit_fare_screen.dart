@@ -31,8 +31,8 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
   DateTime? _dateOfTravel;
   String? _weatherConditions;
   String? _trafficConditions;
-  String? _fareContext;
   String? _passengerLoad;
+  String? _fareContext;
   String _rushHourMessage = '';
   final TextEditingController _landmarkController = TextEditingController();
 
@@ -52,6 +52,23 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _timeOfTravel ?? TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.yellow[700]!, // header background color
+              onPrimary: Colors.black, // header text color
+              onSurface: Colors.black, // body text color
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.yellow[700], // button text color
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null && picked != _timeOfTravel) {
       setState(() {
@@ -67,6 +84,23 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
       initialDate: _dateOfTravel ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.light(
+              primary: Colors.yellow[700]!, // header background color
+              onPrimary: Colors.black, // header text color
+              onSurface: Colors.black, // body text color
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.yellow[700], // button text color
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null && picked != _dateOfTravel) {
       setState(() {
@@ -103,8 +137,51 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
     });
   }
 
+  void _showSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message,
+            style: GoogleFonts.poppins(color: Colors.white)),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        duration: Duration(seconds: isError ? 4 : 2),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).size.height - 100,
+          right: 20,
+          left: 20,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        action: isError
+            ? SnackBarAction(
+                label: 'RETRY',
+                textColor: Colors.white,
+                onPressed: _submitFare,
+              )
+            : null,
+      ),
+    );
+  }
+
   Future<void> _submitFare() async {
     if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    // Additional validation for required fields
+    if (_timeOfTravel == null) {
+      _showSnackBar('Please select time of travel', isError: true);
+      return;
+    }
+
+    if (_dateOfTravel == null) {
+      _showSnackBar('Please select date of travel', isError: true);
+      return;
+    }
+
+    if (_routeTaken.isEmpty) {
+      _showSnackBar('Please add at least one landmark', isError: true);
       return;
     }
 
@@ -114,8 +191,8 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
       _formKey.currentState!.save();
 
       final submission = FareSubmission(
-        source: _source!,
-        destination: _destination!,
+        source: _source!.trim(),
+        destination: _destination!.trim(),
         fareAmount: _fareAmount!,
         routeTaken: _routeTaken,
         dateTime: DateTime(
@@ -128,41 +205,43 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
         weatherConditions: _weatherConditions!,
         trafficConditions: _trafficConditions!,
         passengerLoad: _passengerLoad!,
-        fareContext: _fareContext,
+        fareContext: _fareContext?.trim(),
         rushHourStatus: _rushHourMessage,
         userId: _auth.currentUser!.uid,
         submittedAt: DateTime.now(),
-        status: 'Pending',
+        status: 'pending',
       );
 
       await _fareService.submitFare(submission);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Fare submitted successfully!',
-              style: GoogleFonts.poppins()),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (!mounted) return;
+
+      _showSnackBar('✅ Fare submitted successfully!');
 
       _formKey.currentState!.reset();
       _clearForm();
 
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      });
+
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error submitting fare: ${e.toString()}',
-              style: GoogleFonts.poppins()),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (!mounted) return;
+      _showSnackBar('❌ Error submitting fare: ${e.toString()}', isError: true);
     } finally {
-      setState(() => _isSubmitting = false);
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 
   void _clearForm() {
     setState(() {
+      _source = null;
+      _destination = null;
+      _fareAmount = null;
       _routeTaken.clear();
       _timeOfTravel = null;
       _dateOfTravel = null;
@@ -171,182 +250,8 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
       _passengerLoad = null;
       _fareContext = null;
       _rushHourMessage = '';
+      _landmarkController.clear();
     });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Submit Fare',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.yellow[700],
-        elevation: 0,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                _buildSectionTitle('Trip Details'),
-                _buildTextField(
-                  label: 'Source',
-                  onSaved: (value) => _source = value,
-                  validator: (value) =>
-                      value!.isEmpty ? 'Please enter source' : null,
-                  icon: Icons.location_on,
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  label: 'Destination',
-                  onSaved: (value) => _destination = value,
-                  validator: (value) =>
-                      value!.isEmpty ? 'Please enter destination' : null,
-                  icon: Icons.location_searching,
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  label: 'Fare Amount (₦)',
-                  keyboardType: TextInputType.number,
-                  onSaved: (value) {
-                    final sanitizedValue =
-                        value?.replaceAll(RegExp(r'[^\d.]'), '');
-                    _fareAmount = double.tryParse(sanitizedValue ?? '');
-                    if (_fareAmount == null || _fareAmount! <= 0) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                              'Invalid fare amount. Please enter a valid value.',
-                              style: GoogleFonts.poppins()),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-                  },
-                  validator: (value) {
-                    if (value!.isEmpty) return 'Please enter fare amount';
-                    final amount = double.tryParse(value);
-                    if (amount == null || amount <= 0) {
-                      return 'Please enter a valid number greater than zero';
-                    }
-                    return null;
-                  },
-                  icon: Icons.money,
-                ),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Date and Time'),
-                _buildDateTimePicker(
-                  title: 'Time of Travel',
-                  value: _timeOfTravel?.format(context) ?? 'Select Time',
-                  icon: Icons.access_time,
-                  onTap: () => _selectTime(context),
-                ),
-                if (_rushHourMessage.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Detected: $_rushHourMessage',
-                      style: GoogleFonts.poppins(
-                        fontStyle: FontStyle.italic,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: 16),
-                _buildDateTimePicker(
-                  title: 'Date of Travel',
-                  value: _dateOfTravel != null
-                      ? DateFormat('yyyy-MM-dd').format(_dateOfTravel!)
-                      : 'Select Date',
-                  icon: Icons.calendar_today,
-                  onTap: () => _selectDate(context),
-                ),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Route Details'),
-                _buildLandmarkInput(),
-                const SizedBox(height: 16),
-                _buildLandmarkChips(),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Trip Conditions'),
-                _buildDropdown(
-                  label: 'Weather Conditions',
-                  value: _weatherConditions,
-                  options: _weatherOptions,
-                  onChanged: (value) =>
-                      setState(() => _weatherConditions = value),
-                ),
-                const SizedBox(height: 16),
-                _buildDropdown(
-                  label: 'Traffic Conditions',
-                  value: _trafficConditions,
-                  options: _trafficOptions,
-                  onChanged: (value) =>
-                      setState(() => _trafficConditions = value),
-                ),
-                const SizedBox(height: 16),
-                _buildDropdown(
-                  label: 'Passenger Load',
-                  value: _passengerLoad,
-                  options: _passengerLoadOptions,
-                  onChanged: (value) => setState(() => _passengerLoad = value),
-                ),
-                const SizedBox(height: 24),
-                _buildSectionTitle('Additional Information'),
-                _buildTextField(
-                  label: 'Fare Context (Optional)',
-                  maxLines: 3,
-                  onSaved: (value) => _fareContext = value,
-                  hintText: 'Add any relevant details (optional)',
-                  validator: (value) {
-                    if (value != null && value.length > 300) {
-                      return 'Context is too long. Please limit to 300 characters.';
-                    }
-                    return null;
-                  },
-                  icon: Icons.note_alt_outlined,
-                ),
-                const SizedBox(height: 32),
-                Center(
-                  child: ElevatedButton(
-                    onPressed: _isSubmitting ? null : _submitFare,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.yellow[700],
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 32, vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10.0),
-                      ),
-                    ),
-                    child: _isSubmitting
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.black),
-                            ),
-                          )
-                        : Text(
-                            'Submit Fare',
-                            style: GoogleFonts.poppins(
-                              color: Colors.black,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildSectionTitle(String title) {
@@ -388,6 +293,16 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: Colors.yellow[700]!, width: 2),
         ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey[300]!),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.red[300]!),
+        ),
+        filled: true,
+        fillColor: Colors.white,
       ),
       style: GoogleFonts.poppins(),
     );
@@ -497,17 +412,195 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
     );
   }
 
-  // void _submitFare() {
-  //   if (_formKey.currentState!.validate()) {
-  //     _formKey.currentState!.save();
-  //     // Process fare submission data here
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       SnackBar(
-  //         content: Text('Fare submitted successfully!',
-  //             style: GoogleFonts.poppins()),
-  //         backgroundColor: Colors.green,
-  //       ),
-  //     );
-  //   }
-  // }
+  @override
+  Widget build(BuildContext context) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        colorScheme: ColorScheme.light(
+          primary: Colors.yellow[700]!,
+          onPrimary: Colors.black,
+          secondary: Colors.yellow[700]!,
+          onSecondary: Colors.black,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          focusColor: Colors.yellow[700],
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.yellow[700]!, width: 2),
+          ),
+        ),
+      ),
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Submit Fare',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.yellow[700],
+          elevation: 0,
+        ),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  _buildSectionTitle('Trip Details'),
+                  _buildTextField(
+                    label: 'Source',
+                    onSaved: (value) => _source = value,
+                    validator: (value) =>
+                        value!.isEmpty ? 'Please enter source' : null,
+                    icon: Icons.location_on,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    label: 'Destination',
+                    onSaved: (value) => _destination = value,
+                    validator: (value) =>
+                        value!.isEmpty ? 'Please enter destination' : null,
+                    icon: Icons.location_searching,
+                  ),
+                  const SizedBox(height: 16),
+                  _buildTextField(
+                    label: 'Fare Amount (₦)',
+                    keyboardType: TextInputType.number,
+                    onSaved: (value) {
+                      final sanitizedValue =
+                          value?.replaceAll(RegExp(r'[^\d.]'), '');
+                      _fareAmount = double.tryParse(sanitizedValue ?? '');
+                      if (_fareAmount == null || _fareAmount! <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                                'Invalid fare amount. Please enter a valid value.',
+                                style: GoogleFonts.poppins()),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+                    },
+                    validator: (value) {
+                      if (value!.isEmpty) return 'Please enter fare amount';
+                      final amount = double.tryParse(value);
+                      if (amount == null || amount <= 0) {
+                        return 'Please enter a valid number greater than zero';
+                      }
+                      return null;
+                    },
+                    icon: Icons.money,
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('Date and Time'),
+                  _buildDateTimePicker(
+                    title: 'Time of Travel',
+                    value: _timeOfTravel?.format(context) ?? 'Select Time',
+                    icon: Icons.access_time,
+                    onTap: () => _selectTime(context),
+                  ),
+                  if (_rushHourMessage.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Detected: $_rushHourMessage',
+                        style: GoogleFonts.poppins(
+                          fontStyle: FontStyle.italic,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+                  _buildDateTimePicker(
+                    title: 'Date of Travel',
+                    value: _dateOfTravel != null
+                        ? DateFormat('yyyy-MM-dd').format(_dateOfTravel!)
+                        : 'Select Date',
+                    icon: Icons.calendar_today,
+                    onTap: () => _selectDate(context),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('Route Details'),
+                  _buildLandmarkInput(),
+                  const SizedBox(height: 16),
+                  _buildLandmarkChips(),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('Trip Conditions'),
+                  _buildDropdown(
+                    label: 'Weather Conditions',
+                    value: _weatherConditions,
+                    options: _weatherOptions,
+                    onChanged: (value) =>
+                        setState(() => _weatherConditions = value),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDropdown(
+                    label: 'Traffic Conditions',
+                    value: _trafficConditions,
+                    options: _trafficOptions,
+                    onChanged: (value) =>
+                        setState(() => _trafficConditions = value),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDropdown(
+                    label: 'Passenger Load',
+                    value: _passengerLoad,
+                    options: _passengerLoadOptions,
+                    onChanged: (value) => setState(() => _passengerLoad = value),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSectionTitle('Additional Information'),
+                  _buildTextField(
+                    label: 'Fare Context (Optional)',
+                    maxLines: 3,
+                    onSaved: (value) => _fareContext = value,
+                    hintText: 'Add any relevant details (optional)',
+                    validator: (value) {
+                      if (value != null && value.length > 300) {
+                        return 'Context is too long. Please limit to 300 characters.';
+                      }
+                      return null;
+                    },
+                    icon: Icons.note_alt_outlined,
+                  ),
+                  const SizedBox(height: 32),
+                  Center(
+                    child: ElevatedButton(
+                      onPressed: _isSubmitting ? null : _submitFare,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.yellow[700],
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10.0),
+                        ),
+                      ),
+                      child: _isSubmitting
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.black),
+                              ),
+                            )
+                          : Text(
+                              'Submit Fare',
+                              style: GoogleFonts.poppins(
+                                color: Colors.black,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
