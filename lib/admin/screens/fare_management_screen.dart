@@ -42,7 +42,7 @@ class _FareManagementPageState extends State<FareManagementPage> {
           'status': 'pending', // Update status to 'pending'
         });
 
-        print('Updated status to pending for fare with ID: ${fare.id}');
+        // print('Updated status to pending for fare with ID: ${fare.id}');
       }
 
       // Optionally, show success message
