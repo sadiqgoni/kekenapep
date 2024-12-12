@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,7 +6,6 @@ import 'package:keke_fairshare/admin/screens/fare_management_screen.dart';
 import 'package:keke_fairshare/screens/fare_history.dart';
 import 'package:keke_fairshare/screens/submit_fare_screen.dart';
 import 'package:keke_fairshare/screens/check_fare_screen.dart';
-import 'package:keke_fairshare/screens/profile_screen.dart';
 import '../services/user_stats_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -16,16 +16,27 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final UserStatsService _statsService = UserStatsService();
+  final _refreshKey = GlobalKey<RefreshIndicatorState>();
 
-  final List<Map<String, dynamic>> _pages = [
-    {'title': 'Home', 'icon': Icons.home},
-    {'title': 'Rides', 'icon': Icons.directions_car},
-    {'title': 'Profile', 'icon': Icons.person},
-    {'title': 'Settings', 'icon': Icons.settings},
-  ];
+  Future<void> _refreshData() async {
+    try {
+      // Refresh user stats
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        await _statsService.refreshUserStats(userId);
+      }
+    } catch (e) {
+      // Handle any errors during refresh
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error refreshing data: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,17 +44,25 @@ class _HomeScreenState extends State<HomeScreen> {
     final iconSize = screenWidth * 0.1;
 
     return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          _buildSliverAppBar(),
-          SliverToBoxAdapter(child: _buildWelcomeBanner()),
-          SliverPadding(
-            padding: const EdgeInsets.all(16.0),
-            sliver: _buildMainGrid(screenWidth, iconSize),
-          ),
-        ],
+      body: RefreshIndicator(
+        key: _refreshKey,
+        onRefresh: _refreshData,
+        color: Colors.yellow[700],
+        backgroundColor: Colors.white,
+        strokeWidth: 3,
+        displacement: 40,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            _buildSliverAppBar(),
+            SliverToBoxAdapter(child: _buildWelcomeBanner()),
+            SliverPadding(
+              padding: const EdgeInsets.all(16.0),
+              sliver: _buildMainGrid(screenWidth, iconSize),
+            ),
+          ],
+        ),
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
     );
   }
 
@@ -51,14 +70,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return SliverAppBar(
       floating: true,
       pinned: true,
-      expandedHeight: 120.0,
+      expandedHeight: 100.0,
       backgroundColor: Colors.yellow[700],
       flexibleSpace: FlexibleSpaceBar(
-        title: Text(
-          'KeKe FairShare',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
+        title: FittedBox(
+          fit: BoxFit.contain,
+          alignment: Alignment.center,
+          child: Text(
+            'KeKe FairShare',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
           ),
         ),
         background: Container(
@@ -74,16 +97,15 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: [
         IconButton(
           icon: const Icon(Icons.notifications_outlined, color: Colors.black87),
-          onPressed: () {
-            // Handle notifications
-          },
+          onPressed: () {},
         ),
       ],
     );
   }
 
   Widget _buildWelcomeBanner() {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
       decoration: BoxDecoration(
         color: Colors.yellow[50],
@@ -105,25 +127,31 @@ class _HomeScreenState extends State<HomeScreen> {
           StreamBuilder<User?>(
             stream: _auth.authStateChanges(),
             builder: (context, snapshot) {
+              // if (snapshot.connectionState == ConnectionState.waiting) {
+              //   return const ShimmerLoading();
+              // }
               final userName = snapshot.data?.displayName ?? 'Guest';
               return Row(
                 children: [
                   Text(
                     'Hello, ',
                     style: GoogleFonts.poppins(
-                      fontSize: 28,
+                      fontSize: 24,
                       color: Colors.grey[600],
                     ),
                   ),
                   Expanded(
-                    child: Text(
-                      userName,
-                      style: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.yellow[900],
+                    child: Hero(
+                      tag: 'username',
+                      child: Text(
+                        userName,
+                        style: GoogleFonts.poppins(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.yellow[900],
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
@@ -131,16 +159,117 @@ class _HomeScreenState extends State<HomeScreen> {
             },
           ),
           const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.yellow[100]!),
-            ),
-            child: Row(
-              children: [
-                Container(
+          _buildTipCard(),
+          const SizedBox(height: 16),
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(FirebaseAuth.instance.currentUser!.uid)
+                .snapshots(),
+            builder: (context, snapshot) {
+              // Handle loading state
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Center(
+                  child: CircularProgressIndicator(
+                    color: Colors.blue,
+                  ),
+                );
+              }
+
+              // Handle no data or error state
+              if (!snapshot.hasData || !snapshot.data!.exists) {
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildAnimatedStatCard(
+                            'Total Submissions',
+                            '0',
+                            Icons.bar_chart,
+                            Colors.blue,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildAnimatedStatCard(
+                            'Your Points',
+                            '0',
+                            Icons.stars,
+                            Colors.amber,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              }
+
+              // Safely extract data
+              final data = snapshot.data!.data() as Map<String, dynamic>?;
+
+              // Ensure default values
+              final stats = {
+                'points': data?['points'] ?? 0,
+                'totalSubmissions': data?['totalSubmissions'] ?? 0
+              };
+
+              return Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildAnimatedStatCard(
+                          'Total Submissions',
+                          '${stats['totalSubmissions']}',
+                          Icons.bar_chart,
+                          Colors.blue,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildAnimatedStatCard(
+                          'Your Points',
+                          '${stats['points']}',
+                          Icons.stars,
+                          Colors.amber,
+                        ),
+                      ),
+                    ],
+                  )
+                ],
+              );
+            },
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTipCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.yellow[100]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          TweenAnimationBuilder(
+            tween: Tween<double>(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 500),
+            builder: (context, value, child) {
+              return Transform.scale(
+                scale: value,
+                child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: Colors.yellow[100],
@@ -152,67 +281,113 @@ class _HomeScreenState extends State<HomeScreen> {
                     size: 24,
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Quick Tip',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.yellow[900],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Earn 2 points for each submission and 3 bonus points when approved!',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
+              );
+            },
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Quick Tip',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.yellow[900],
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Earn 2 points for each submission and 3 bonus points when approved!',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                    height: 1.4,
                   ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 16),
-          StreamBuilder<Map<String, dynamic>>(
-            stream: Stream.periodic(const Duration(seconds: 30))
-                .asyncMap((_) => _statsService.getUserStats()),
-            initialData: const {'points': 0, 'totalSubmissions': 0},
-            builder: (context, snapshot) {
-              final stats = snapshot.data!;
-              return Row(
-                children: [
-                  _buildStatCard(
-                    'Total Submissions',
-                    '${stats['totalSubmissions']}',
-                    Icons.bar_chart,
-                    Colors.blue,
-                  ),
-                  const SizedBox(width: 12),
-                  _buildStatCard(
-                    'Your Points',
-                    '${stats['points']}',
-                    Icons.star,
-                    Colors.amber,
-                    subtitle: '+${UserStatsService.POINTS_PER_SUBMISSION} per submission',
-                  ),
-                ],
-              );
-            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color, {String? subtitle}) {
+  Widget _buildAnimatedStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return TweenAnimationBuilder(
+      tween: Tween<double>(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 10),
+      builder: (context, animValue, child) {
+        return Transform.scale(
+          scale: animValue,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(color: color.withOpacity(0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: color),
+                const SizedBox(height: 8),
+                Text(
+                  value,
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRecentActivity(Map<String, dynamic> activity) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Recent Activity',
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Add your recent activity items here
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String label, String value, IconData icon, Color color,
+      {String? subtitle}) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(16),
@@ -376,53 +551,19 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  Widget _buildBottomNavigationBar() {
-    return Container(
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 0,
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.yellow[700],
-        unselectedItemColor: Colors.grey,
-        selectedLabelStyle: GoogleFonts.poppins(fontWeight: FontWeight.w600),
-        unselectedLabelStyle: GoogleFonts.poppins(),
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-            switch (index) {
-              case 0:
-                // We're already on the home screen, so no navigation needed
-                break;
-              case 1:
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const ProfileScreen()),
-                );
-                break;
-            }
-          });
-        },
-      ),
-    );
-  }
 }
+
+// class ShimmerLoading extends StatelessWidget {
+//   const ShimmerLoading({super.key});
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return Container(
+//       height: 30,
+//       decoration: BoxDecoration(
+//         color: Colors.grey[200],
+//         borderRadius: BorderRadius.circular(8),
+//       ),
+//     );
+//   }
+// }

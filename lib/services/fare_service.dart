@@ -12,6 +12,11 @@ class FareService {
 
   Future<String> submitFare(FareSubmission submission) async {
     try {
+      final userId = _auth.currentUser!.uid;
+      
+      // Ensure user stats are initialized
+      await _userStatsService.initializeUserStats(userId);
+      
       // Start a batch write
       final batch = _firestore.batch();
       
@@ -23,7 +28,7 @@ class FareService {
       // Add to user's submissions
       final userSubmissionRef = _firestore
           .collection('users')
-          .doc(_auth.currentUser!.uid)
+          .doc(userId)
           .collection('submissions')
           .doc(fareRef.id);
       batch.set(userSubmissionRef, {
@@ -51,14 +56,14 @@ class FareService {
       await batch.commit();
 
       // Award points for submission
-      await _userStatsService.addPoints(_auth.currentUser!.uid, 'submission');
+      await _userStatsService.addPoints(userId, 'submission');
 
       await AppLogger.logInfo(
         'FareSubmission',
         'Fare submitted successfully',
         additionalInfo: {
           'fareId': fareRef.id,
-          'userId': _auth.currentUser!.uid,
+          'userId': userId,
           'route': routeId,
           'pointsAwarded': UserStatsService.POINTS_PER_SUBMISSION,
         },
@@ -77,27 +82,44 @@ class FareService {
 
   Future<void> updateFareStatus(String fareId, String status) async {
     try {
-      final batch = _firestore.batch();
-      
-      // Update main fare document
+      // Get the fare document first to check current status
       final fareRef = _firestore.collection('fares').doc(fareId);
-      batch.update(fareRef, {'status': status});
-
-      // Get the fare document to get the user ID
       final fareDoc = await fareRef.get();
+      
+      if (!fareDoc.exists) {
+        throw 'Fare document not found';
+      }
+
+      final currentStatus = fareDoc.data()?['status'];
       final userId = fareDoc.data()?['userId'];
 
-      if (userId != null) {
+      // Only proceed if there's a status change and we have a userId
+      if (currentStatus != status && userId != null) {
+        final batch = _firestore.batch();
+        
+        // Update main fare document
+        batch.update(fareRef, {
+          'status': status,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+
         // Update user's submission status
         final userSubmissionRef = _firestore
             .collection('users')
             .doc(userId)
             .collection('submissions')
             .doc(fareId);
-        batch.update(userSubmissionRef, {'status': status});
+        
+        batch.update(userSubmissionRef, {
+          'status': status,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
 
-        // If the status is 'Approved', award bonus points
-        if (status == 'Approved') {
+        // Commit the batch first
+        await batch.commit();
+
+        // If the status is being changed to 'Approved', award bonus points
+        if (status == 'Approved' && currentStatus != 'Approved') {
           await _userStatsService.addPoints(userId, 'approved');
           
           await AppLogger.logInfo(
@@ -107,17 +129,20 @@ class FareService {
               'fareId': fareId,
               'userId': userId,
               'bonusPoints': UserStatsService.BONUS_POINTS_APPROVED,
+              'previousStatus': currentStatus,
             },
           );
         }
       }
-
-      await batch.commit();
     } catch (e) {
       await AppLogger.logError(
-        'FareService',
+        'FareStatusUpdate',
         'Error updating fare status',
-        additionalInfo: {'error': e.toString()},
+        additionalInfo: {
+          'fareId': fareId,
+          'status': status,
+          'error': e.toString(),
+        },
       );
       throw 'Failed to update fare status: ${e.toString()}';
     }
