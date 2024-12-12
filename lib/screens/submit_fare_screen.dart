@@ -140,8 +140,7 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message,
-            style: GoogleFonts.poppins(color: Colors.white)),
+        content: Text(message, style: GoogleFonts.poppins(color: Colors.white)),
         backgroundColor: isError ? Colors.red : Colors.green,
         duration: Duration(seconds: isError ? 4 : 2),
         behavior: SnackBarBehavior.floating,
@@ -226,7 +225,6 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
           Navigator.pop(context);
         }
       });
-
     } catch (e) {
       if (!mounted) return;
       _showSnackBar('❌ Error submitting fare: ${e.toString()}', isError: true);
@@ -546,7 +544,8 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
                     label: 'Passenger Load',
                     value: _passengerLoad,
                     options: _passengerLoadOptions,
-                    onChanged: (value) => setState(() => _passengerLoad = value),
+                    onChanged: (value) =>
+                        setState(() => _passengerLoad = value),
                   ),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Additional Information'),

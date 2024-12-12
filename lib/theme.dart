@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class AppTheme {
@@ -7,8 +8,15 @@ class AppTheme {
 
   static ThemeData get theme {
     return ThemeData(
-      primaryColor: primaryColor,
-      hintColor: accentColor,
+      cupertinoOverrideTheme:
+          const CupertinoThemeData().copyWith(primaryColor: primaryColor),
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: Colors.black,
+        selectionHandleColor: Colors.black,
+        selectionColor: primaryColor,
+      ),
+      // useMaterial3: false,
+      hintColor: Colors.grey,
       scaffoldBackgroundColor: backgroundColor,
       fontFamily: 'Roboto',
       textTheme: const TextTheme(

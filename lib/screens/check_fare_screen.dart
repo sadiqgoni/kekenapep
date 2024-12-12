@@ -9,9 +9,10 @@ import '../models/fare_filter.dart';
 import 'package:keke_fairshare/widgets/filter_dialog.dart';
 
 class CheckFareScreen extends StatefulWidget {
-  const CheckFareScreen({Key? key}) : super(key: key);
+  const CheckFareScreen({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _CheckFareScreenState createState() => _CheckFareScreenState();
 }
 
@@ -21,7 +22,7 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
 
   String? _source;
   String? _destination;
-  List<String> _landmarks = [];
+  final List<String> _landmarks = [];
   final TextEditingController _landmarkController = TextEditingController();
   bool _isLoading = false;
   FareFilter? _currentFilter;
@@ -43,9 +44,12 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
   }
 
   Future<void> _generateFare() async {
-    if (!(_formKey.currentState?.validate() ?? false) || _landmarks.length < 3) {
+    if (!(_formKey.currentState?.validate() ?? false) ||
+        _landmarks.length < 2) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please enter source, destination, and at least 3 landmarks.')),
+        const SnackBar(
+            content: Text(
+                'Please enter source, destination, and at least 2 landmarks.')),
       );
       return;
     }
@@ -53,76 +57,60 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
     setState(() => _isLoading = true);
     try {
       _formKey.currentState!.save();
-      
-      // await AppLogger.logInfo(
-      //   'CheckFare',
-      //   'Starting fare check',
-      //   additionalInfo: {
-      //     'source': _source,
-      //     'destination': _destination,
-      //     'landmarks': _landmarks,
-      //   },
-      // );
 
       // Step 1: Get approved routes within the last 30 days
       final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
-      
+
       final sourceDestQuery = await _firestore
           .collection('fares')
           .where('status', isEqualTo: 'Approved')
           .where('submittedAt', isGreaterThan: thirtyDaysAgo.toIso8601String())
           .get();
 
-      // await AppLogger.logInfo(
-      //   'CheckFare',
-      //   'Initial query complete',
-      //   additionalInfo: {'matchCount': sourceDestQuery.docs.length},
-      // );
-
       // Step 2: Score and filter matches
       List<Map<String, dynamic>> potentialMatches = [];
-      
+
       for (var doc in sourceDestQuery.docs) {
-        final data = doc.data() as Map<String, dynamic>;
-        
+        final data = doc.data();
+
         // Initialize match score
         double matchScore = 0;
         double maxPossibleScore = 0;
-        
+
         // Source/destination scoring (max 20 points)
         maxPossibleScore += 20;
         if (_isExactMatch(data['source'], _source!)) {
-          matchScore += 10;  // Increased from 5
+          matchScore += 10; // Increased from 5
         } else if (_isFuzzyMatch(data['source'], _source!)) {
-          matchScore += 5;   // Increased from 3
+          matchScore += 5; // Increased from 3
         }
-        
+
         if (_isExactMatch(data['destination'], _destination!)) {
-          matchScore += 10;  // Increased from 5
+          matchScore += 10; // Increased from 5
         } else if (_isFuzzyMatch(data['destination'], _destination!)) {
-          matchScore += 5;   // Increased from 3
+          matchScore += 5; // Increased from 3
         }
 
         // Landmark scoring (max 30 points - 10 per landmark)
-        List<String> routeLandmarks = List<String>.from(data['routeTaken'] ?? []);
+        List<String> routeLandmarks =
+            List<String>.from(data['routeTaken'] ?? []);
         int landmarkMatches = 0;
         double landmarkScore = 0;
-        
+
         for (String landmark in _landmarks) {
           maxPossibleScore += 10;
           double bestMatchForLandmark = 0;
-          
+
           for (String routeLandmark in routeLandmarks) {
             if (_isExactMatch(landmark, routeLandmark)) {
-              bestMatchForLandmark = 10;  // Increased from 3
+              bestMatchForLandmark = 10; // Increased from 3
               landmarkMatches++;
               break;
             } else {
               double similarity = _calculateLevenshteinSimilarity(
-                landmark.toLowerCase(), 
-                routeLandmark.toLowerCase()
-              );
-              bestMatchForLandmark = max(bestMatchForLandmark, similarity * 8);  // Up to 8 points for close matches
+                  landmark.toLowerCase(), routeLandmark.toLowerCase());
+              bestMatchForLandmark = max(bestMatchForLandmark,
+                  similarity * 8); // Up to 8 points for close matches
             }
           }
           landmarkScore += bestMatchForLandmark;
@@ -139,10 +127,11 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
         double matchPercentage = (matchScore / maxPossibleScore) * 100;
 
         // Only include if there's a meaningful match
-        if (matchPercentage >= 40 && landmarkMatches >= 1) {  // Adjusted thresholds
+        if (matchPercentage >= 40 && landmarkMatches >= 1) {
+          // Adjusted thresholds
           potentialMatches.add({
             ...data,
-            'matchScore': matchPercentage,  // Store as percentage
+            'matchScore': matchPercentage, // Store as percentage
           });
         }
       }
@@ -161,7 +150,8 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
       }
 
       // Sort by match score
-      potentialMatches.sort((a, b) => b['matchScore'].compareTo(a['matchScore']));
+      potentialMatches
+          .sort((a, b) => b['matchScore'].compareTo(a['matchScore']));
 
       // Calculate weighted average fare
       double totalWeight = 0;
@@ -171,7 +161,7 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
       for (var match in potentialMatches.take(5)) {
         double weight = match['matchScore'] / 10.0;
         double fare = double.parse(match['fareAmount'].toString());
-        
+
         weightedFareSum += fare * weight;
         totalWeight += weight;
         fares.add(fare);
@@ -206,28 +196,28 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
       if (_currentFilter != null) {
         _matchingRoutes = _matchingRoutes.where((route) {
           final routeDate = DateTime.parse(route['dateTime']);
-          
-          if (_currentFilter!.fromDate != null && 
+
+          if (_currentFilter!.fromDate != null &&
               routeDate.isBefore(_currentFilter!.fromDate!)) {
             return false;
           }
 
-          if (_currentFilter!.weatherCondition != null && 
+          if (_currentFilter!.weatherCondition != null &&
               route['weatherConditions'] != _currentFilter!.weatherCondition) {
             return false;
           }
 
-          if (_currentFilter!.trafficCondition != null && 
+          if (_currentFilter!.trafficCondition != null &&
               route['trafficConditions'] != _currentFilter!.trafficCondition) {
             return false;
           }
 
-          if (_currentFilter!.passengerLoad != null && 
+          if (_currentFilter!.passengerLoad != null &&
               route['passengerLoad'] != _currentFilter!.passengerLoad) {
             return false;
           }
 
-          if (_currentFilter!.rushHourStatus != null && 
+          if (_currentFilter!.rushHourStatus != null &&
               route['rushHourStatus'] != _currentFilter!.rushHourStatus) {
             return false;
           }
@@ -241,7 +231,6 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
         estimatedFare.round(),
         confidence,
       );
-
     } catch (e) {
       // await AppLogger.logError(
       //   'CheckFare',
@@ -259,50 +248,52 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
   bool _isExactMatch(String str1, String str2) {
     str1 = str1.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
     str2 = str2.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
-    
+
     // Check for exact match
     if (str1 == str2) return true;
-    
+
     // Check for match with common variations
     final variations1 = _getCommonVariations(str1);
     final variations2 = _getCommonVariations(str2);
-    
+
     return variations1.any((v1) => variations2.contains(v1));
   }
 
   bool _isFuzzyMatch(String str1, String str2) {
     str1 = str1.toLowerCase().trim();
     str2 = str2.toLowerCase().trim();
-    
+
     // Check if one string contains the other
     if (str1.contains(str2) || str2.contains(str1)) {
       return true;
     }
-    
+
     // Calculate similarity
     double similarity = _calculateLevenshteinSimilarity(str1, str2);
-    
+
     // More lenient threshold for longer strings
     double threshold = str1.length > 10 || str2.length > 10 ? 0.7 : 0.8;
-    
+
     return similarity > threshold;
   }
 
   String _calculateConfidence(
-      List<Map<String, dynamic>> topMatches,
-      double minFare,
-      double maxFare) {
+      List<Map<String, dynamic>> topMatches, double minFare, double maxFare) {
     // Calculate confidence based on:
     // 1. Number of good matches
     // 2. Fare range spread
     // 3. Match scores
-    
+
     double fareSpread = (maxFare - minFare) / maxFare;
-    double avgMatchScore = topMatches.map((m) => m['matchScore']).reduce((a, b) => a + b) / topMatches.length;
-    
+    double avgMatchScore =
+        topMatches.map((m) => m['matchScore']).reduce((a, b) => a + b) /
+            topMatches.length;
+
     if (topMatches.length >= 4 && fareSpread < 0.2 && avgMatchScore > 6) {
       return 'High';
-    } else if (topMatches.length >= 3 && fareSpread < 0.3 && avgMatchScore > 4) {
+    } else if (topMatches.length >= 3 &&
+        fareSpread < 0.3 &&
+        avgMatchScore > 4) {
       return 'Medium';
     } else {
       return 'Low';
@@ -367,8 +358,8 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
                           color: Colors.grey[600],
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      _buildConfidenceIndicator(confidence),
+                      // const SizedBox(height: 8),
+                      _buildWarningIndicator(confidence),
                     ],
                   ),
                 ),
@@ -385,8 +376,9 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
                     ),
                   ),
                   TextButton.icon(
-                    icon: Icon(Icons.filter_list, color: Colors.black),
-                    label: Text('Filter', style: TextStyle(color: Colors.black)),
+                    icon: const Icon(Icons.filter_list, color: Colors.black),
+                    label: const Text('Filter',
+                        style: TextStyle(color: Colors.black)),
                     onPressed: _showFilterDialog,
                   ),
                 ],
@@ -437,22 +429,20 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
     }
   }
 
-  Widget _buildConfidenceIndicator(String confidence) {
-    Color confidenceColor = confidence == 'High'
-        ? Colors.green
-        : confidence == 'Medium'
-            ? Colors.orange
-            : Colors.red;
-
+  Widget _buildWarningIndicator(String confidence) {
     return Row(
       children: [
-        Icon(Icons.info_outline, size: 16, color: confidenceColor),
-        const SizedBox(width: 4),
+        const Icon(
+          Icons.info_outline,
+          size: 10,
+          color: Colors.red,
+        ),
+        const SizedBox(width: 12),
         Text(
-          'Confidence: $confidence',
+          'Note: This is not actual fare price, always negotiate with driver!',
           style: GoogleFonts.poppins(
-            fontSize: 12,
-            color: confidenceColor,
+            fontSize: 8,
+            color: Colors.red,
           ),
         ),
       ],
@@ -473,8 +463,12 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
     );
 
     // Initialize first row and column
-    for (int i = 0; i <= s1.length; i++) matrix[i][0] = i;
-    for (int j = 0; j <= s2.length; j++) matrix[0][j] = j;
+    for (int i = 0; i <= s1.length; i++) {
+      matrix[i][0] = i;
+    }
+    for (int j = 0; j <= s2.length; j++) {
+      matrix[0][j] = j;
+    }
 
     // Fill in the rest of the matrix
     for (int i = 1; i <= s1.length; i++) {
@@ -495,7 +489,7 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
 
   Set<String> _getCommonVariations(String text) {
     final Set<String> variations = {text};
-    
+
     // Add common abbreviations and variations
     variations.add(text.replaceAll('road', 'rd'));
     variations.add(text.replaceAll('rd', 'road'));
@@ -503,10 +497,10 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
     variations.add(text.replaceAll('st', 'street'));
     variations.add(text.replaceAll('junction', 'jcn'));
     variations.add(text.replaceAll('jcn', 'junction'));
-    
+
     // Remove special characters
     variations.add(text.replaceAll(RegExp(r'[^\w\s]'), ''));
-    
+
     return variations;
   }
 
@@ -563,13 +557,15 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
                           ),
                         ),
                         child: _isLoading
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
+                                  color: Colors.yellow[700],
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Colors.black),
+                                  valueColor:
+                                      const AlwaysStoppedAnimation<Color>(
+                                          Colors.black),
                                 ),
                               )
                             : Text(
