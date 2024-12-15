@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'fare_detail_screen.dart'; // Import the FareDetailScreen
 
 class FareHistoryScreen extends StatelessWidget {
@@ -152,20 +153,81 @@ class FareHistoryScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: Colors.yellow[50],
+        titleTextStyle: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold, color: Colors.black),
         title: Text('Delete Fare', style: GoogleFonts.poppins()),
         content: Text('Are you sure you want to delete this fare?',
             style: GoogleFonts.poppins()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: GoogleFonts.poppins()),
+            child:
+                Text('Cancel', style: GoogleFonts.poppins(color: Colors.black)),
           ),
           ElevatedButton(
-            onPressed: () {
-              fareDocument.reference.delete();
-              Navigator.pop(context);
+            onPressed: () async {
+              try {
+                final userId = FirebaseAuth.instance.currentUser?.uid;
+                if (userId == null) {
+                  throw Exception('User not logged in');
+                }
+
+                final firestore = FirebaseFirestore.instance;
+                await firestore.runTransaction((transaction) async {
+                  // Get user stats document
+                  final statsRef = firestore
+                      .collection('users')
+                      .doc(userId)
+                      .collection('statistics')
+                      .doc('overview');
+
+                  final statsDoc = await transaction.get(statsRef);
+                  if (!statsDoc.exists) {
+                    throw Exception('User stats not found');
+                  }
+
+                  // Update user stats
+                  final currentPoints = statsDoc.data()?['points'] ?? 0;
+                  final currentSubmissions =
+                      statsDoc.data()?['totalSubmissions'] ?? 0;
+
+                  transaction.update(statsRef, {
+                    'points': currentPoints - 2, // Subtract 2 points
+                    'totalSubmissions':
+                        currentSubmissions - 1, // Decrement submissions
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  });
+
+                  // Delete the fare document
+                  transaction.delete(fareDocument.reference);
+                });
+
+                Navigator.pop(context); // Close dialog
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Fare deleted successfully',
+                      style: GoogleFonts.poppins(),
+                    ),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              } catch (e) {
+                Navigator.pop(context); // Close dialog
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Error deleting fare: ${e.toString()}',
+                      style: GoogleFonts.poppins(),
+                    ),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             },
-            child: Text('Delete', style: GoogleFonts.poppins()),
+            child:
+                Text('Delete', style: GoogleFonts.poppins(color: Colors.black)),
           ),
         ],
       ),

@@ -16,12 +16,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final UserService _userService = UserService();
   final AuthService _authService = AuthService();
 
-  late Future<Map<String, dynamic>> _userDataFuture;
+  late Stream<Map<String, dynamic>> _userDataStream;
 
   @override
   void initState() {
     super.initState();
-    _userDataFuture = _userService.getCurrentUserData();
+    _userDataStream = _userService.getUserDataStream();
   }
 
   Future<void> _updateProfile(Map<String, dynamic> updates) async {
@@ -34,9 +34,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 style: GoogleFonts.poppins()),
           ),
         );
-        setState(() {
-          _userDataFuture = _userService.getCurrentUserData();
-        });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -61,13 +58,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               label: 'Name',
               validator: Validators.validateName,
               onSaved: (value) => _updateProfile({'name': value}),
-            ),
-            const SizedBox(height: 16),
-            CustomTextField(
-              initialValue: userData['phone'] ?? '',
-              label: 'Phone Number',
-              validator: Validators.validatePhone,
-              onSaved: (value) => _updateProfile({'phone': value}),
             ),
           ],
         ),
@@ -135,8 +125,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: Colors.yellow[700],
         elevation: 0,
       ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _userDataFuture,
+      body: StreamBuilder<Map<String, dynamic>>(
+        stream: _userDataStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -159,19 +149,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildInfoTile(
                   icon: Icons.person,
                   title: 'Name',
-                  subtitle: userData['name'] ?? 'Not set',
+                  subtitle: userData['fullName'] ?? 'Not set',
                   onTap: () => _showEditProfileDialog(userData),
                 ),
                 _buildInfoTile(
                   icon: Icons.email,
                   title: 'Email',
                   subtitle: userData['email'] ?? 'Not available',
-                ),
-                _buildInfoTile(
-                  icon: Icons.phone,
-                  title: 'Phone Number',
-                  subtitle: userData['phone'] ?? 'Not set',
-                  onTap: () => _showEditProfileDialog(userData),
                 ),
                 const SizedBox(height: 24),
                 _buildSectionHeader('Settings'),
@@ -210,42 +194,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildProfileHeader(Map<String, dynamic> userData) {
+    String initials = (userData['fullName'] ?? 'Passenger')
+        .toString()
+        .trim()
+        .split(' ')
+        .map((word) => word.isNotEmpty ? word[0].toUpperCase() : '')
+        .join('');
+
+    // Take up to 3 initials (or fewer if less words are present)
+    String avatarText =
+        initials.length > 3 ? initials.substring(0, 3) : initials;
+
     return Center(
       child: Column(
         children: [
-          GestureDetector(
-            onTap: () {
-              // TODO: Implement profile picture change
-            },
-            child: Stack(
-              children: [
-                CircleAvatar(
-                  radius: 60,
-                  backgroundColor: Colors.yellow[100],
-                  backgroundImage: userData['profilePicture'] != null
-                      ? NetworkImage(userData['profilePicture'])
-                      : const AssetImage('assets/images/banana.png')
-                          as ImageProvider,
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.yellow[700],
-                      shape: BoxShape.circle,
-                    ),
-                    child:
-                        const Icon(Icons.edit, size: 20, color: Colors.white),
+          Center(
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  avatarText,
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.yellow[700],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Text(
-            userData['name'] ?? 'User',
+            userData['fullName'] ?? 'User',
             style:
                 GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold),
           ),
@@ -435,55 +420,55 @@ class UserService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
+  Stream<Map<String, dynamic>> getUserDataStream() {
+    final userId = _auth.currentUser?.uid;
+    if (userId == null) throw Exception('No user logged in');
+    
+    return _firestore.collection('users').doc(userId).snapshots()
+      .map((doc) => doc.data() as Map<String, dynamic>);
+  }
+
   Future<Map<String, dynamic>> getCurrentUserData() async {
-    final user = _auth.currentUser;
-    if (user != null) {
-      final userDoc = _firestore.collection('users').doc(user.uid);
-      final doc = await userDoc.get();
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) throw Exception('No user logged in');
 
-      if (!doc.exists) {
-        // Create initial document if it doesn't exist
-        await userDoc.set({
-          'name': user.displayName ?? 'User',
-          'email': user.email,
-          'notificationsEnabled': true,
-          'createdAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-      }
-
-      return (await userDoc.get()).data() ?? {};
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) throw Exception('User data not found');
+      
+      return doc.data() as Map<String, dynamic>;
+    } catch (e) {
+      throw Exception('Failed to get user data: $e');
     }
-    return {};
   }
 
   Future<void> updateUserProfile(Map<String, dynamic> updates) async {
-    final user = _auth.currentUser;
-    if (user != null) {
-      final userDoc = _firestore.collection('users').doc(user.uid);
-      await userDoc.set(updates, SetOptions(merge: true)); // Merge updates
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) throw Exception('No user logged in');
+
+      await _firestore.collection('users').doc(userId).update({
+        ...updates,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      throw Exception('Failed to update profile: $e');
     }
   }
 
   Future<void> submitSupportRequest(String message) async {
     try {
-      final user = _auth.currentUser;
-
-      if (user == null) {
-        throw Exception("No user is currently signed in.");
-      }
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) throw Exception('No user logged in');
 
       await _firestore.collection('support_requests').add({
-        'userId': user.uid,
-        'userEmail': user.email,
+        'userId': userId,
         'message': message,
-        'timestamp': FieldValue.serverTimestamp(),
-        'status': 'Pending',
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
       });
-
-      print("Support request submitted successfully.");
     } catch (e) {
-      print("Error submitting support request: $e");
-      rethrow;
+      throw Exception('Failed to submit support request: $e');
     }
   }
 }
@@ -491,28 +476,39 @@ class UserService {
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  Future<void> changePassword(
-      String currentPassword, String newPassword) async {
-    final user = _auth.currentUser;
-    if (user != null) {
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception('No user logged in');
+      
+      // Re-authenticate user before changing password
       final credential = EmailAuthProvider.credential(
         email: user.email!,
         password: currentPassword,
       );
       await user.reauthenticateWithCredential(credential);
+      
+      // Change password
       await user.updatePassword(newPassword);
+    } catch (e) {
+      if (e.toString().contains('wrong-password')) {
+        throw Exception('Current password is incorrect');
+      }
+      throw Exception('Failed to change password: $e');
     }
   }
 
   Future<void> signOut(BuildContext context) async {
-    await _auth.signOut();
-    // ignore: use_build_context_synchronously
-    Navigator.pushAndRemoveUntil(
+    try {
+      await _auth.signOut();
       // ignore: use_build_context_synchronously
-      context,
-      MaterialPageRoute(builder: (context) => const SignInScreen()),
-      (route) => false,
-    );
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const SignInScreen()),
+        (route) => false,
+      );
+    } catch (e) {
+      throw Exception('Failed to sign out: $e');
+    }
   }
 }
 
@@ -526,20 +522,12 @@ class Validators {
     return null;
   }
 
-  static String? validatePhone(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Please enter your phone number';
-    }
-    // Add more specific phone number validation if needed
-    return null;
-  }
-
   static String? validatePassword(String? value) {
     if (value == null || value.isEmpty) {
       return 'Please enter a password';
     }
-    if (value.length < 6) {
-      return 'Password must be at least 6 characters long';
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters long';
     }
     return null;
   }
