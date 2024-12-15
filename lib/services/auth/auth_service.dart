@@ -52,7 +52,6 @@ class AuthService {
           'avatar': null,
           'preferences': {
             'notifications': true,
-            'emailUpdates': true,
           },
         },
         'metadata': {

@@ -28,20 +28,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await _userService.updateUserProfile(updates);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Profile updated successfully',
-                style: GoogleFonts.poppins()),
-          ),
-        );
+        _showTopSnackBar('Profile updated successfully');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('Error updating profile: $e', style: GoogleFonts.poppins()),
-        ),
-      );
+      _showTopSnackBar('Error updating profile: $e', isError: true);
     }
   }
 
@@ -54,10 +44,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             CustomTextField(
-              initialValue: userData['name'] ?? '',
+              initialValue: userData['fullName'] ?? '',
               label: 'Name',
               validator: Validators.validateName,
-              onSaved: (value) => _updateProfile({'name': value}),
+              onSaved: (value) => _updateProfile({'fullName': value}),
             ),
           ],
         ),
@@ -66,54 +56,107 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showChangePasswordDialog() {
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (context) => CustomDialog(
         title: 'Change Password',
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             CustomTextField(
+              controller: currentPasswordController,
               label: 'Current Password',
               obscureText: true,
               validator: Validators.validatePassword,
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             CustomTextField(
+              controller: newPasswordController,
               label: 'New Password',
               obscureText: true,
               validator: Validators.validatePassword,
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             CustomTextField(
+              controller: confirmPasswordController,
               label: 'Confirm New Password',
               obscureText: true,
-              validator: Validators.validatePassword,
+              validator: (value) {
+                if (value != newPasswordController.text) {
+                  return 'Passwords do not match';
+                }
+                return Validators.validatePassword(value);
+              },
             ),
           ],
         ),
-        onSubmit: (values) => _authService.changePassword(
-          values['Current Password']!,
-          values['New Password']!,
-        ),
+        onSubmit: (values) async {
+          try {
+            await _authService.changePassword(
+              currentPasswordController.text,
+              newPasswordController.text,
+            );
+            // ignore: use_build_context_synchronously
+            Navigator.pop(context);
+            _showTopSnackBar('Password changed successfully');
+          } catch (e) {
+            _showTopSnackBar('Failed to change password: $e', isError: true);
+          }
+        },
       ),
     );
   }
 
   void _showSupportRequestDialog() {
+    final TextEditingController messageController = TextEditingController();
+    
     showDialog(
       context: context,
       builder: (context) => CustomDialog(
         title: 'Submit Support Request',
-        content: const CustomTextField(
-          label: 'Describe your issue or request',
-          maxLines: 3,
-          validator: Validators.validateNotEmpty,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CustomTextField(
+              controller: messageController,
+              label: 'Describe your issue or request',
+              maxLines: 3,
+              validator: Validators.validateNotEmpty,
+            ),
+          ],
         ),
-        onSubmit: (values) => _userService.submitSupportRequest(
-            values['Describe your issue or request'] ?? ''),
+        onSubmit: (values) async {
+          try {
+            await _userService.submitSupportRequest(messageController.text.trim());
+            // ignore: use_build_context_synchronously
+            Navigator.pop(context);
+            _showTopSnackBar('Support request submitted successfully');
+          } catch (e) {
+            _showTopSnackBar('Failed to submit support request: $e', isError: true);
+          }
+        },
       ),
     );
+  }
+
+  void _showTopSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message, style: GoogleFonts.poppins()),
+          backgroundColor: isError ? Colors.red : Colors.green,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
   }
 
   @override
@@ -230,7 +273,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            userData['fullName'] ?? 'User',
+            userData['fullName'] ?? 'Passenger',
             style:
                 GoogleFonts.poppins(fontSize: 24, fontWeight: FontWeight.bold),
           ),
@@ -294,6 +337,7 @@ class CustomTextField extends StatelessWidget {
   final int maxLines;
   final String? Function(String?)? validator;
   final Function(String?)? onSaved;
+  final TextEditingController? controller;
 
   const CustomTextField({
     super.key,
@@ -303,11 +347,13 @@ class CustomTextField extends StatelessWidget {
     this.maxLines = 1,
     this.validator,
     this.onSaved,
+    this.controller,
   });
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
+      controller: controller,
       initialValue: initialValue,
       obscureText: obscureText,
       maxLines: maxLines,
@@ -423,9 +469,12 @@ class UserService {
   Stream<Map<String, dynamic>> getUserDataStream() {
     final userId = _auth.currentUser?.uid;
     if (userId == null) throw Exception('No user logged in');
-    
-    return _firestore.collection('users').doc(userId).snapshots()
-      .map((doc) => doc.data() as Map<String, dynamic>);
+
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .snapshots()
+        .map((doc) => doc.data() as Map<String, dynamic>);
   }
 
   Future<Map<String, dynamic>> getCurrentUserData() async {
@@ -434,8 +483,18 @@ class UserService {
       if (userId == null) throw Exception('No user logged in');
 
       final doc = await _firestore.collection('users').doc(userId).get();
-      if (!doc.exists) throw Exception('User data not found');
-      
+      if (!doc.exists) {
+        // Create initial user document if it doesn't exist
+        final initialData = {
+          'fullName': _auth.currentUser?.displayName ?? 'Passenger',
+          'email': _auth.currentUser?.email,
+          'notificationsEnabled': true,
+          'createdAt': FieldValue.serverTimestamp(),
+        };
+        await _firestore.collection('users').doc(userId).set(initialData);
+        return initialData;
+      }
+
       return doc.data() as Map<String, dynamic>;
     } catch (e) {
       throw Exception('Failed to get user data: $e');
@@ -446,6 +505,11 @@ class UserService {
     try {
       final userId = _auth.currentUser?.uid;
       if (userId == null) throw Exception('No user logged in');
+
+      // Update display name if fullName is being updated
+      if (updates.containsKey('fullName')) {
+        await _auth.currentUser?.updateDisplayName(updates['fullName']);
+      }
 
       await _firestore.collection('users').doc(userId).update({
         ...updates,
@@ -459,13 +523,20 @@ class UserService {
   Future<void> submitSupportRequest(String message) async {
     try {
       final userId = _auth.currentUser?.uid;
+      final userEmail = _auth.currentUser?.email;
       if (userId == null) throw Exception('No user logged in');
+
+      // Get user data for additional context
+      final userData = await getCurrentUserData();
 
       await _firestore.collection('support_requests').add({
         'userId': userId,
+        'userEmail': userEmail,
+        'userName': userData['fullName'],
         'message': message,
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
+        'lastUpdated': FieldValue.serverTimestamp(),
       });
     } catch (e) {
       throw Exception('Failed to submit support request: $e');
@@ -475,31 +546,48 @@ class UserService {
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<void> changePassword(String currentPassword, String newPassword) async {
     try {
       final user = _auth.currentUser;
-      if (user == null) throw Exception('No user logged in');
-      
+      if (user == null || user.email == null) throw Exception('No user logged in');
+
       // Re-authenticate user before changing password
       final credential = EmailAuthProvider.credential(
         email: user.email!,
         password: currentPassword,
       );
       await user.reauthenticateWithCredential(credential);
-      
+
       // Change password
       await user.updatePassword(newPassword);
+
+      // Log password change in Firestore
+      await _firestore.collection('users').doc(user.uid).collection('security_events').add({
+        'type': 'password_change',
+        'timestamp': FieldValue.serverTimestamp(),
+        'success': true,
+      });
     } catch (e) {
+      String errorMessage = 'Failed to change password';
       if (e.toString().contains('wrong-password')) {
-        throw Exception('Current password is incorrect');
+        errorMessage = 'Current password is incorrect';
+      } else if (e.toString().contains('requires-recent-login')) {
+        errorMessage = 'Please sign in again before changing your password';
       }
-      throw Exception('Failed to change password: $e');
+      throw Exception(errorMessage);
     }
   }
 
   Future<void> signOut(BuildContext context) async {
     try {
+      final userId = _auth.currentUser?.uid;
+      if (userId != null) {
+        await _firestore.collection('users').doc(userId).update({
+          'lastSignOut': FieldValue.serverTimestamp(),
+        });
+      }
       await _auth.signOut();
       // ignore: use_build_context_synchronously
       Navigator.of(context).pushAndRemoveUntil(
