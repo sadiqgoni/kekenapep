@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:keke_fairshare/admin/screens/fare_management_screen.dart';
 import 'package:keke_fairshare/screens/fare_history.dart';
+import 'package:keke_fairshare/screens/profile_screen.dart';
 import 'package:keke_fairshare/screens/submit_fare_screen.dart';
 import 'package:keke_fairshare/screens/check_fare_screen.dart';
 import '../services/user_stats_service.dart';
@@ -130,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const ShimmerLoading();
               }
-              final userName = snapshot.data?.displayName ?? 'Guest';
+              final userName = snapshot.data?.displayName ?? 'Passenger';
               return Row(
                 children: [
                   Text(
@@ -364,78 +365,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildRecentActivity(Map<String, dynamic> activity) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Recent Activity',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          // Add your recent activity items here
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String label, String value, IconData icon, Color color,
-      {String? subtitle}) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: Colors.yellow[100]!),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            Text(
-              label,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-            if (subtitle != null) ...[
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: GoogleFonts.poppins(
-                  fontSize: 10,
-                  color: Colors.green[600],
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildMainGrid(double screenWidth, double iconSize) {
     return SliverGrid(
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -483,10 +412,8 @@ class _HomeScreenState extends State<HomeScreen> {
           label: 'Profile',
           iconSize: iconSize,
           onTap: () {
-            Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const FareManagementPage()));
+            Navigator.push(context,
+                MaterialPageRoute(builder: (context) => const ProfileScreen()));
           },
         ),
       ]),
