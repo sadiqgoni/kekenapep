@@ -473,11 +473,17 @@ class UserService {
     final userId = _auth.currentUser?.uid;
     if (userId == null) throw Exception('No user logged in');
 
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .map((doc) => doc.data() as Map<String, dynamic>);
+    return _firestore.collection('users').doc(userId).snapshots().map((doc) {
+      if (!doc.exists) {
+        // Return default data if document doesn't exist
+        return {
+          'fullName': _auth.currentUser?.displayName ?? 'Passenger',
+          'email': _auth.currentUser?.email ?? '',
+          'notificationsEnabled': true,
+        };
+      }
+      return doc.data() ?? {}; // Return empty map if data is null
+    });
   }
 
   Future<Map<String, dynamic>> getCurrentUserData() async {
@@ -604,7 +610,10 @@ class AuthService {
         (route) => false,
       );
     } catch (e) {
-      throw Exception('Failed to sign out: $e');
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const SignInScreen()),
+        (route) => false,
+      );
     }
   }
 }

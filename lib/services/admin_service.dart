@@ -14,7 +14,7 @@ class AdminService {
     try {
       final user = _auth.currentUser;
       if (user == null) return false;
-      
+
       // Check if email matches default admin email
       return user.email == defaultAdminEmail;
     } catch (e) {
@@ -43,25 +43,25 @@ class AdminService {
   }
 
   // Create admin account if it doesn't exist
-  Future<void> ensureAdminExists() async {
-    try {
-      // Try to sign in with default admin credentials
-      try {
-        await _auth.signInWithEmailAndPassword(
-          email: defaultAdminEmail,
-          password: defaultAdminPassword,
-        );
-      } catch (e) {
-        // If sign in fails, create the admin account
-        await _auth.createUserWithEmailAndPassword(
-          email: defaultAdminEmail,
-          password: defaultAdminPassword,
-        );
-      }
-    } catch (e) {
-      print('Error ensuring admin exists: $e');
-    }
-  }
+  // Future<void> ensureAdminExists() async {
+  //   try {
+  //     // Try to sign in with default admin credentials
+  //     try {
+  //       await _auth.signInWithEmailAndPassword(
+  //         email: defaultAdminEmail,
+  //         password: defaultAdminPassword,
+  //       );
+  //     } catch (e) {
+  //       // If sign in fails, create the admin account
+  //       await _auth.createUserWithEmailAndPassword(
+  //         email: defaultAdminEmail,
+  //         password: defaultAdminPassword,
+  //       );
+  //     }
+  //   } catch (e) {
+  //     print('Error ensuring admin exists: $e');
+  //   }
+  // }
 
   // Get admin dashboard stats
   Future<Map<String, dynamic>> getAdminStats() async {
@@ -90,10 +90,7 @@ class AdminService {
   // Get total users count
   Future<int> getTotalUsersCount() async {
     try {
-      final query = await _firestore
-          .collection('users')
-          .count()
-          .get();
+      final query = await _firestore.collection('users').count().get();
       return query.count ?? 0;
     } catch (e) {
       return 0;
@@ -101,7 +98,8 @@ class AdminService {
   }
 
   // Update fare status
-  Future<void> updateFareStatus(String fareId, String status, {String? rejectionReason}) async {
+  Future<void> pdateFareStatus(String fareId, String status,
+      {String? rejectionReason}) async {
     try {
       final fareRef = _firestore.collection('fares').doc(fareId);
       final updateData = {
@@ -109,7 +107,7 @@ class AdminService {
         'metadata.reviewedBy': _auth.currentUser?.uid,
         'metadata.reviewedAt': FieldValue.serverTimestamp(),
       };
-      
+
       if (rejectionReason != null) {
         updateData['metadata.rejectionReason'] = rejectionReason;
       }
@@ -124,7 +122,8 @@ class AdminService {
   Future<bool> createFirstAdmin(String email, String password) async {
     try {
       // Check if any admin exists
-      final adminSnapshot = await _firestore.collection('admins').limit(1).get();
+      final adminSnapshot =
+          await _firestore.collection('admins').limit(1).get();
       if (adminSnapshot.docs.isNotEmpty) {
         return false; // Admin already exists
       }
@@ -158,10 +157,7 @@ class AdminService {
       final user = _auth.currentUser;
       if (user == null) return;
 
-      await _firestore
-          .collection('admins')
-          .doc(user.uid)
-          .update({
+      await _firestore.collection('admins').doc(user.uid).update({
         'tokenExpiry': Timestamp.fromDate(
           DateTime.now().add(const Duration(hours: 12)),
         ),
