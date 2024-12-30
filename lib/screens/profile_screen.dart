@@ -113,7 +113,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showSupportRequestDialog() {
     final TextEditingController messageController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => CustomDialog(
@@ -131,12 +131,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         onSubmit: (values) async {
           try {
-            await _userService.submitSupportRequest(messageController.text.trim());
+            await _userService
+                .submitSupportRequest(messageController.text.trim());
             // ignore: use_build_context_synchronously
             Navigator.pop(context);
             _showTopSnackBar('Support request submitted successfully');
           } catch (e) {
-            _showTopSnackBar('Failed to submit support request: $e', isError: true);
+            _showTopSnackBar('Failed to submit support request: $e',
+                isError: true);
           }
         },
       ),
@@ -145,7 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showTopSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
       ..showSnackBar(
@@ -154,7 +156,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           backgroundColor: isError ? Colors.red : Colors.green,
           behavior: SnackBarBehavior.floating,
           margin: const EdgeInsets.all(16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
   }
@@ -548,10 +551,12 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  Future<void> changePassword(String currentPassword, String newPassword) async {
+  Future<void> changePassword(
+      String currentPassword, String newPassword) async {
     try {
       final user = _auth.currentUser;
-      if (user == null || user.email == null) throw Exception('No user logged in');
+      if (user == null || user.email == null)
+        throw Exception('No user logged in');
 
       // Re-authenticate user before changing password
       final credential = EmailAuthProvider.credential(
@@ -564,7 +569,11 @@ class AuthService {
       await user.updatePassword(newPassword);
 
       // Log password change in Firestore
-      await _firestore.collection('users').doc(user.uid).collection('security_events').add({
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('security_events')
+          .add({
         'type': 'password_change',
         'timestamp': FieldValue.serverTimestamp(),
         'success': true,
