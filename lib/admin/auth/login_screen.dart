@@ -16,21 +16,22 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final AdminService _adminService = AdminService();
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _isCreatingAccount = false;
 
   @override
   void initState() {
     super.initState();
-    // Set default admin credentials for testing
-    _emailController.text = AdminService.defaultAdminEmail;
-    _passwordController.text = AdminService.defaultAdminPassword;
-    _createDefaultAdmin();
+    _checkAdminStatus();
   }
 
-  Future<void> _createDefaultAdmin() async {
-    await _adminService.ensureAdminExists();
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await _adminService.isCurrentUserAdmin();
+    if (isAdmin && mounted) {
+      Navigator.pushReplacementNamed(context, '/admin/dashboard');
+    }
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _handleAuthentication() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -43,6 +44,18 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
     setState(() => _isLoading = true);
     try {
+      if (_isCreatingAccount) {
+        await _adminService.createAdminAccount(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Admin account created successfully')),
+          );
+        }
+      }
+
       final success = await _adminService.signInAsAdmin(
         _emailController.text.trim(),
         _passwordController.text,
@@ -52,11 +65,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         throw 'Invalid admin credentials';
       }
 
-      // Navigate to dashboard
       if (mounted) {
-        Navigator.pushReplacement(
+        Navigator.pushNamedAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
+          '/admin/dashboard',
+          (route) => false, // Clear all routes
         );
       }
     } catch (e) {
@@ -79,11 +92,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin Login'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pushReplacementNamed(context, '/'),
-        ),
+        title: Text(_isCreatingAccount ? 'Create Admin Account' : 'Admin Login'),
+        automaticallyImplyLeading: false, // Remove back arrow
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -99,7 +109,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             TextField(
               controller: _emailController,
               decoration: const InputDecoration(
-                labelText: 'Admin Email',
+                labelText: 'Email',
                 prefixIcon: Icon(Icons.email),
                 border: OutlineInputBorder(),
               ),
@@ -128,14 +138,28 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _isLoading ? null : _handleLogin,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueGrey,
-                ),
+                onPressed: _isLoading ? null : _handleAuthentication,
                 child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Login as Admin'),
+                    ? const CircularProgressIndicator()
+                    : Text(_isCreatingAccount ? 'Create Account' : 'Login'),
               ),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _isLoading
+                  ? null
+                  : () {
+                      setState(() {
+                        _isCreatingAccount = !_isCreatingAccount;
+                      });
+                    },
+              child: Text(_isCreatingAccount
+                  ? 'Already have an account? Login'
+                  : 'Create new admin account'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pushReplacementNamed(context, '/'),
+              child: const Text('Go to Passenger App'),
             ),
           ],
         ),

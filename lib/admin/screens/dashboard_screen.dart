@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:keke_fairshare/admin/screens/fare_management_screen.dart';
-import 'notification_scree.dart';
+import 'package:keke_fairshare/admin/screens/fare_management.dart';
 import 'overview_screen.dart';
 import 'settings_screen.dart';
 import 'user_management.dart';
@@ -19,8 +18,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   static final List<Widget> _widgetOptions = <Widget>[
     const OverviewPage(),
     const FareManagementPage(),
-    UserManagementPage(),
-    const NotificationsPage(),
+    const UserManagementPage(),
     const SettingsPage(),
   ];
 
@@ -49,12 +47,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             label: 'Users',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.notifications),
-            label: 'Notifications',
-          ),
-          BottomNavigationBarItem(
             icon: Icon(Icons.settings),
-            label: 'Settings',
+            label: 'Profile',
           ),
         ],
         currentIndex: _selectedIndex,

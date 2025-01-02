@@ -5,60 +5,77 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Register user
-  Future<User?> registerWithEmailAndPassword(
-      String email, String password, String fullName) async {
+  // Register user with phone and password
+  Future<User?> registerWithPhoneAndPassword(
+      String phone, String password, String fullName) async {
     try {
-      // Create auth user
-      UserCredential userCredential =
-          await _auth.createUserWithEmailAndPassword(
-        email: email,
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: "$phone@kekefairshare.com", // Using phone as email
         password: password,
       );
 
       if (userCredential.user != null) {
-        // Set display name
-        await userCredential.user!.updateDisplayName(fullName);
-
-        // Create user profile document
+        // Create user profile
         await _createUserProfile(userCredential.user!.uid, {
-          'uid': userCredential.user!.uid,
-          'email': email,
           'fullName': fullName,
+          'phoneNumber': phone,
+          'role': 'passenger',
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
           'isActive': true,
-          'role': 'passenger',
         });
 
         // Initialize user stats
         await _initializeUserStats(userCredential.user!.uid);
-      }
 
+        return userCredential.user;
+      }
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'email-already-in-use':
+          message = 'A user with this phone number already exists';
+          break;
+        case 'weak-password':
+          message = 'The password provided is too weak';
+          break;
+        default:
+          message = e.message ?? 'An error occurred during registration';
+      }
+      throw message;
+    }
+    return null;
+  }
+
+  // Sign in user with phone and password
+  Future<User?> signInWithPhoneAndPassword(
+      String phone, String password) async {
+    try {
+      final userCredential = await _auth.signInWithEmailAndPassword(
+        email: "$phone@kekefairshare.com", // Using phone as email
+        password: password,
+      );
       return userCredential.user;
-    } catch (e) {
-      print('Registration Error: $e');
-      throw e;
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+          message = 'No user found with this phone number';
+          break;
+        case 'wrong-password':
+          message = 'Wrong password provided';
+          break;
+        default:
+          message = e.message ?? 'An error occurred during sign in';
+      }
+      throw message;
     }
   }
 
   // Create user profile in Firestore
   Future<void> _createUserProfile(String uid, Map<String, dynamic> data) async {
     try {
-      await _firestore.collection('users').doc(uid).set({
-        ...data,
-        'profile': {
-          'phoneNumber': null,
-          'avatar': null,
-          'preferences': {
-            'notifications': true,
-          },
-        },
-        'metadata': {
-          'lastLogin': FieldValue.serverTimestamp(),
-          'registrationCompleted': false,
-        },
-      });
+      await _firestore.collection('users').doc(uid).set(data);
     } catch (e) {
       print('Error creating user profile: $e');
       throw e;
@@ -89,41 +106,9 @@ class AuthService {
     }
   }
 
-  // Sign in user
-  Future<User?> signInWithEmailAndPassword(
-      String email, String password) async {
-    try {
-      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      if (userCredential.user != null) {
-        // Update last login
-        await _firestore
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .update({
-          'metadata.lastLogin': FieldValue.serverTimestamp(),
-        });
-      }
-
-      return userCredential.user;
-    } catch (e) {
-      print('Sign In Error: $e');
-      throw e;
-    }
-  }
-
   // Sign out user
   Future<void> signOut() async {
     try {
-      final String uid = _auth.currentUser?.uid ?? '';
-      if (uid.isNotEmpty) {
-        await _firestore.collection('users').doc(uid).update({
-          'metadata.lastLogout': FieldValue.serverTimestamp(),
-        });
-      }
       await _auth.signOut();
     } catch (e) {
       print('Sign Out Error: $e');

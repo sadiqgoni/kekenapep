@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:keke_fairshare/admin/screens/fare_management_screen.dart';
+import 'package:keke_fairshare/admin/screens/fare_management.dart';
 import 'package:keke_fairshare/screens/fare_history.dart';
 import 'package:keke_fairshare/screens/profile_screen.dart';
 import 'package:keke_fairshare/screens/submit_fare_screen.dart';

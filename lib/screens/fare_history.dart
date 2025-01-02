@@ -9,9 +9,11 @@ class FareHistoryScreen extends StatelessWidget {
   const FareHistoryScreen({super.key});
 
   Stream<QuerySnapshot> getFareHistoryStream() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
     return FirebaseFirestore.instance
         .collection('fares')
-        .orderBy('submittedAt', descending: true) // Sort by submission date
+        .where('submitter.uid', isEqualTo: userId)
+        .orderBy('submittedAt', descending: true)
         .snapshots();
   }
 

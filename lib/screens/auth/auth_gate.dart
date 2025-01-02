@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:keke_fairshare/screens/auth/signin_screen.dart';
-import 'package:keke_fairshare/screens/home_screen.dart';
 import 'package:keke_fairshare/widgets/bottom_navbar.dart';
 
 class AuthGate extends StatelessWidget {

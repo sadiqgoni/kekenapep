@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:keke_fairshare/services/admin_service.dart';
 
 class FareManagementPage extends StatefulWidget {
   const FareManagementPage({super.key});
@@ -16,21 +15,20 @@ class FareManagementPage extends StatefulWidget {
 
 class _FareManagementPageState extends State<FareManagementPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final AdminService _adminService = AdminService();
   DocumentSnapshot? _lastDocument;
   bool _hasMore = true;
-  String _selectedFilter = 'Pending'; // Default filter
+  String _selectedFilter = 'pending'; // Default filter
   bool _isLoading = false;
   final TextEditingController _rejectionReasonController =
       TextEditingController();
   @override
   void initState() {
     super.initState();
-    _selectedFilter = 'Pending';
-    // updateFareStatusToPending();
+    _selectedFilter = 'pending';
+    // updateFareStatusTopending();
   }
 
-  Future<void> updateFareStatusToPending() async {
+  Future<void> updateFareStatusTopending() async {
     try {
       // Fetch the existing fare documents from Firestore
       final fares = await FirebaseFirestore.instance.collection('fares').get();
@@ -44,7 +42,7 @@ class _FareManagementPageState extends State<FareManagementPage> {
           'status': 'pending', // Update status to 'pending'
         });
 
-        // print('Updated status to pending for fare with ID: ${fare.id}');
+        print('Updated status to pending for fare with ID: ${fare.id}');
       }
 
       // Optionally, show success message
@@ -77,7 +75,7 @@ class _FareManagementPageState extends State<FareManagementPage> {
         actions: [
           DropdownButton<String>(
             value: _selectedFilter,
-            items: ['All', 'Pending', 'Approved', 'Rejected']
+            items: ['All', 'pending', 'Approved', 'Rejected']
                 .map((String value) => DropdownMenuItem<String>(
                       value: value,
                       child: Text(value, style: GoogleFonts.poppins()),
@@ -162,7 +160,7 @@ class _FareManagementPageState extends State<FareManagementPage> {
             Row(
               children: [
                 Text('Status: ', style: GoogleFonts.poppins()),
-                _buildStatusChip(data['status'] ?? 'Pending'),
+                _buildStatusChip(data['status'] ?? 'pending'),
               ],
             ),
           ],
@@ -296,7 +294,7 @@ class _FareManagementPageState extends State<FareManagementPage> {
             onPressed: () {
               Navigator.pop(context);
               _updateFareStatus(fareId, 'Rejected',
-                  rejectionReason: _rejectionReasonController.text);
+                  reason: _rejectionReasonController.text);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child:
@@ -308,29 +306,52 @@ class _FareManagementPageState extends State<FareManagementPage> {
   }
 
   Future<void> _updateFareStatus(String fareId, String status,
-      {String? rejectionReason}) async {
+      {String? reason}) async {
+    setState(() => _isLoading = true);
     try {
-      setState(() => _isLoading = true);
-      await _adminService.updateFareStatus(fareId, status, rejectionReason: rejectionReason);
-      
+      // Update main fare document
+      final fareRef = _firestore.collection('fares').doc(fareId);
+      final fareDoc = await fareRef.get();
+      final data = fareDoc.data() as Map<String, dynamic>;
+
+      await fareRef.update({
+        'status': status,
+        'reviewedAt': DateTime.now().toIso8601String(),
+        'reviewedBy': 'admin', // You might want to use actual admin ID
+        if (reason != null) 'rejectionReason': reason,
+      });
+
+      // Update user's submission copy
+      if (data['userId'] != null) {
+        await _firestore
+            .collection('users')
+            .doc(data['userId'])
+            .collection('submissions')
+            .doc(fareId)
+            .update({
+          'status': status,
+          'reviewedAt': DateTime.now().toIso8601String(),
+          'reviewedBy': 'admin',
+          if (reason != null) 'rejectionReason': reason,
+        });
+      }
+
       // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Fare status updated to $status'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Fare $status successfully', style: GoogleFonts.poppins()),
+          backgroundColor: status == 'Approved' ? Colors.green : Colors.red,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating fare: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Error updating fare: $e', style: GoogleFonts.poppins()),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
       setState(() => _isLoading = false);
     }

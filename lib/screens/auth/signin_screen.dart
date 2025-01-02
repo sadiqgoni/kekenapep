@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:keke_fairshare/screens/auth/register_screen.dart';
-import 'package:keke_fairshare/screens/auth/social_button.dart';
+import 'package:keke_fairshare/widgets/bottom_navbar.dart';
 import 'package:keke_fairshare/screens/home_screen.dart';
 import 'package:keke_fairshare/services/auth/auth_service.dart';
 import 'package:keke_fairshare/widgets/header_section.dart';
@@ -14,7 +14,6 @@ class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
 
   @override
-  // ignore: library_private_types_in_public_api
   _SignInScreenState createState() => _SignInScreenState();
 }
 
@@ -22,58 +21,37 @@ class _SignInScreenState extends State<SignInScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isPasswordVisible = false;
   bool _isLoading = false;
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  int _logoTapCount = 0;
-  final int _requiredTaps = 7;
-  DateTime? _firstTapTime;
 
-  @override
-  void initState() {
-    super.initState();
-    _emailController.text = 'admin@gmail.com';
-    _passwordController.text = '12345678';
-  }
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  DateTime? _firstTapTime; // To track the time of the first tap
+  int _logoTapCount = 0; // To track the number of taps on the logo
+  final int _requiredTaps =
+      5; // The required number of taps to trigger the admin screen
 
   void _handleSignIn() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       try {
         final authService = AuthService();
-        User? user = await authService.signInWithEmailAndPassword(
-          _emailController.text.trim(),
+        User? user = await authService.signInWithPhoneAndPassword(
+          _phoneController.text.trim(),
           _passwordController.text.trim(),
         );
         if (user != null) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            MaterialPageRoute(builder: (context) => const BottomNavBar()),
           );
         }
       } catch (e) {
-        _showErrorDialog('Sign In Error: ${e.toString()}');
-      } finally {
-        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
       }
+      setState(() => _isLoading = false);
     }
-  }
-
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Error',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        content: Text(message, style: GoogleFonts.poppins()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('OK',
-                style: GoogleFonts.poppins(color: const Color(0xFFFDB300))),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
@@ -127,12 +105,12 @@ class _SignInScreenState extends State<SignInScreen> {
                 child: Column(
                   children: <Widget>[
                     InputField(
-                      hintText: "Email",
-                      icon: Icons.email_outlined,
+                      hintText: "Phone Number",
+                      icon: Icons.phone_outlined,
                       screenWidth: screenWidth,
-                      controller: _emailController,
-                      validator: (value) => !value!.contains('@')
-                          ? 'Please enter a valid email'
+                      controller: _phoneController,
+                      validator: (value) => value!.isEmpty
+                          ? 'Please enter your phone number'
                           : null,
                     ),
                     const SizedBox(height: 20),
@@ -155,21 +133,7 @@ class _SignInScreenState extends State<SignInScreen> {
                             () => _isPasswordVisible = !_isPasswordVisible),
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {
-                          // Handle forgot password
-                        },
-                        child: Text(
-                          'Forgot Password?',
-                          style: GoogleFonts.poppins(
-                              color: const Color(0xFFFDB300)),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 40),
                     ElevatedButton(
                       onPressed: _isLoading ? null : _handleSignIn,
                       style: ElevatedButton.styleFrom(
@@ -188,29 +152,6 @@ class _SignInScreenState extends State<SignInScreen> {
                                   color: Colors.black,
                                   fontWeight: FontWeight.bold),
                             ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text("Or sign in with", style: GoogleFonts.poppins()),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        SocialButton(
-                          icon: Icons.g_mobiledata,
-                          onPressed: () {
-                            // Handle Google Sign-In
-                          },
-                          color: const Color(0xFFFDB300),
-                        ),
-                        const SizedBox(width: 20),
-                        SocialButton(
-                          icon: Icons.facebook,
-                          onPressed: () {
-                            // Handle Facebook Sign-In
-                          },
-                          color: const Color(0xFFFDB300),
-                        ),
-                      ],
                     ),
                     const SizedBox(height: 30),
                     Row(
@@ -246,7 +187,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
   }

@@ -5,63 +5,131 @@ class AdminService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Default admin credentials
-  static const defaultAdminEmail = 'admin@kekefairshare.com';
-  static const defaultAdminPassword = 'admin123456';
-
   // Simple check if the current user is admin
   Future<bool> isCurrentUserAdmin() async {
     try {
       final user = _auth.currentUser;
       if (user == null) return false;
 
-      // Check if email matches default admin email
-      return user.email == defaultAdminEmail;
+      final userDoc = await _firestore.collection('users').doc(user.uid).get();
+      return userDoc.data()?['role'] == 'admin';
     } catch (e) {
       print('Error checking admin status: $e');
       return false;
     }
   }
 
-  // Sign in as admin
-  Future<bool> signInAsAdmin(String email, String password) async {
+  // Create a new admin account
+  Future<UserCredential> createAdminAccount(String email, String password) async {
     try {
-      if (email != defaultAdminEmail) {
-        return false;
+      // Check if email is already registered
+      final methods = await _auth.fetchSignInMethodsForEmail(email);
+      if (methods.isNotEmpty) {
+        throw 'An account with this email already exists';
       }
 
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      // Set the user's role as admin in Firestore
+      await _firestore.collection('users').doc(userCredential.user!.uid).set({
+        'email': email,
+        'role': 'admin',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'weak-password':
+          message = 'The password is too weak';
+          break;
+        case 'email-already-in-use':
+          message = 'An account with this email already exists';
+          break;
+        case 'invalid-email':
+          message = 'Invalid email format';
+          break;
+        default:
+          message = 'Account creation failed: ${e.message}';
+      }
+      throw message;
+    } catch (e) {
+      print('Error creating admin account: $e');
+      rethrow;
+    }
+  }
+
+  // Sign in and verify admin role
+  Future<bool> signInAsAdmin(String email, String password) async {
+    try {
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      return userCredential.user != null;
+      if (userCredential.user == null) return false;
+
+      // Verify admin role
+      final userDoc = await _firestore
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .get();
+      
+      final isAdmin = userDoc.data()?['role'] == 'admin';
+      
+      // If not admin, sign out
+      if (!isAdmin) {
+        await _auth.signOut();
+        throw 'This account does not have admin privileges';
+      }
+      
+      return true;
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+          message = 'No user found with this email';
+          break;
+        case 'wrong-password':
+          message = 'Invalid password';
+          break;
+        case 'invalid-email':
+          message = 'Invalid email format';
+          break;
+        case 'user-disabled':
+          message = 'This account has been disabled';
+          break;
+        default:
+          message = 'Authentication failed: ${e.message}';
+      }
+      throw message;
     } catch (e) {
       print('Error signing in as admin: $e');
-      return false;
+      rethrow;
     }
   }
 
   // Create admin account if it doesn't exist
-  // Future<void> ensureAdminExists() async {
-  //   try {
-  //     // Try to sign in with default admin credentials
-  //     try {
-  //       await _auth.signInWithEmailAndPassword(
-  //         email: defaultAdminEmail,
-  //         password: defaultAdminPassword,
-  //       );
-  //     } catch (e) {
-  //       // If sign in fails, create the admin account
-  //       await _auth.createUserWithEmailAndPassword(
-  //         email: defaultAdminEmail,
-  //         password: defaultAdminPassword,
-  //       );
-  //     }
-  //   } catch (e) {
-  //     print('Error ensuring admin exists: $e');
-  //   }
-  // }
+  Future<void> ensureAdminExists() async {
+    try {
+      // Try to sign in with default admin credentials
+      try {
+        await _auth.signInWithEmailAndPassword(
+          email: 'admin@kekefairshare.com',
+          password: 'admin123456',
+        );
+      } catch (e) {
+        // If sign in fails, create the admin account
+        await createAdminAccount('admin@kekefairshare.com', 'admin123456');
+      }
+    } catch (e) {
+      print('Error ensuring admin exists: $e');
+    }
+  }
 
   // Get admin dashboard stats
   Future<Map<String, dynamic>> getAdminStats() async {
@@ -98,22 +166,59 @@ class AdminService {
   }
 
   // Update fare status
-  Future<void> pdateFareStatus(String fareId, String status,
+  Future<void> updateFareStatus(String fareId, String status,
       {String? rejectionReason}) async {
     try {
       final fareRef = _firestore.collection('fares').doc(fareId);
-      final updateData = {
-        'metadata.status': status,
-        'metadata.reviewedBy': _auth.currentUser?.uid,
-        'metadata.reviewedAt': FieldValue.serverTimestamp(),
-      };
-
-      if (rejectionReason != null) {
-        updateData['metadata.rejectionReason'] = rejectionReason;
+      
+      // Get the current fare data
+      final fareDoc = await fareRef.get();
+      if (!fareDoc.exists) {
+        throw 'Fare not found';
       }
 
-      await fareRef.update(updateData);
+      // Create or update metadata
+      final currentMetadata = (fareDoc.data()?['metadata'] as Map<String, dynamic>?) ?? {};
+      final updatedMetadata = {
+        ...currentMetadata,
+        'status': status,
+        'reviewedBy': _auth.currentUser?.uid,
+        'reviewedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (rejectionReason != null && rejectionReason.isNotEmpty) {
+        updatedMetadata['rejectionReason'] = rejectionReason;
+      }
+
+      // Update the document with the new metadata
+      await fareRef.update({
+        'metadata': updatedMetadata,
+      });
+
+      // Update user stats if status changed to approved
+      if (status == 'Approved') {
+        final userId = fareDoc.data()?['userId'];
+        if (userId != null) {
+          final userRef = _firestore.collection('users').doc(userId);
+          final userDoc = await userRef.get();
+          
+          if (userDoc.exists) {
+            final currentStats = (userDoc.data()?['stats'] as Map<String, dynamic>?) ?? {};
+            final points = currentStats['points'] ?? 0;
+            final approvedSubmissions = currentStats['approvedSubmissions'] ?? 0;
+            
+            await userRef.update({
+              'stats': {
+                ...currentStats,
+                'points': points + 1,
+                'approvedSubmissions': approvedSubmissions + 1,
+              }
+            });
+          }
+        }
+      }
     } catch (e) {
+      print('Error updating fare status: $e');
       rethrow;
     }
   }
@@ -129,10 +234,7 @@ class AdminService {
       }
 
       // Create admin account
-      final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final userCredential = await createAdminAccount(email, password);
 
       // Add admin to Firestore
       await _firestore.collection('admins').doc(userCredential.user!.uid).set({
