@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/fare_filter.dart';
+import '../passenger/models/fare_filter.dart';
 
 class FilterDialog extends StatefulWidget {
   final FareFilter? currentFilter;
@@ -205,4 +205,4 @@ class _FilterDialogState extends State<FilterDialog> {
       ),
     );
   }
-} 
+}

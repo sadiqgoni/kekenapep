@@ -1,8 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:keke_fairshare/admin/screens/fare_management.dart';
-import 'overview_screen.dart';
-import 'settings_screen.dart';
-import 'user_management.dart';
+import 'package:keke_fairshare/index.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});

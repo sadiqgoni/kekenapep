@@ -1,8 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:keke_fairshare/screens/home_screen.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:keke_fairshare/services/admin_stats_service.dart';
+import 'package:keke_fairshare/index.dart';
 
 class OverviewPage extends StatefulWidget {
   const OverviewPage({super.key});
@@ -19,9 +15,9 @@ class _OverviewPageState extends State<OverviewPage>
   Map<String, dynamic> _stats = {
     'totalUsers': 0,
     'totalSubmissions': 0,
-    'approvedSubmissions': 0,
-    'pendingSubmissions': 0,
-    'rejectedSubmissions': 0,
+    'ApprovedSubmissions': 0,
+    'PendingSubmissions': 0,
+    'RejectedSubmissions': 0,
   };
 
   @override
@@ -43,9 +39,6 @@ class _OverviewPageState extends State<OverviewPage>
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final iconSize = screenWidth * 0.1;
-
     return Scaffold(
       body: RefreshIndicator(
         key: _refreshKey,
@@ -183,7 +176,7 @@ class _OverviewPageState extends State<OverviewPage>
                   Expanded(
                     child: _buildAnimatedStatCard(
                       'Approved',
-                      '${_stats['approvedSubmissions']}',
+                      '${_stats['ApprovedSubmissions']}',
                       Icons.check_circle_outline,
                       const Color(0xFF10B981), // Modern green
                     ),
@@ -192,7 +185,7 @@ class _OverviewPageState extends State<OverviewPage>
                   Expanded(
                     child: _buildAnimatedStatCard(
                       'Pending',
-                      '${_stats['pendingSubmissions']}',
+                      '${_stats['PendingSubmissions']}',
                       Icons.pending_outlined,
                       const Color(0xFFF59E0B), // Modern amber
                     ),

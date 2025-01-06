@@ -1,3 +1,5 @@
+// ignore_for_file: non_constant_identifier_names
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AdminStatsService {
@@ -7,25 +9,25 @@ class AdminStatsService {
     try {
       // Get total users count
       final usersCount = await _firestore.collection('users').count().get();
-      
+
       // Get submissions statistics
       final submissions = await _firestore.collection('fares').get();
       int totalSubmissions = submissions.size;
-      int approvedSubmissions = 0;
-      int pendingSubmissions = 0;
-      int rejectedSubmissions = 0;
+      int ApprovedSubmissions = 0;
+      int PendingSubmissions = 0;
+      int RejectedSubmissions = 0;
 
       for (var doc in submissions.docs) {
-        String status = doc.data()['status'] ?? 'pending';
+        String status = doc.data()['status'] ?? 'Pending';
         switch (status.toLowerCase()) {
-          case 'approved':
-            approvedSubmissions++;
+          case 'Approved':
+            ApprovedSubmissions++;
             break;
-          case 'pending':
-            pendingSubmissions++;
+          case 'Pending':
+            PendingSubmissions++;
             break;
-          case 'rejected':
-            rejectedSubmissions++;
+          case 'Rejected':
+            RejectedSubmissions++;
             break;
         }
       }
@@ -33,18 +35,18 @@ class AdminStatsService {
       return {
         'totalUsers': usersCount.count,
         'totalSubmissions': totalSubmissions,
-        'approvedSubmissions': approvedSubmissions,
-        'pendingSubmissions': pendingSubmissions,
-        'rejectedSubmissions': rejectedSubmissions,
+        'ApprovedSubmissions': ApprovedSubmissions,
+        'PendingSubmissions': PendingSubmissions,
+        'RejectedSubmissions': RejectedSubmissions,
       };
     } catch (e) {
       print('Error fetching admin stats: $e');
       return {
         'totalUsers': 0,
         'totalSubmissions': 0,
-        'approvedSubmissions': 0,
-        'pendingSubmissions': 0,
-        'rejectedSubmissions': 0,
+        'ApprovedSubmissions': 0,
+        'PendingSubmissions': 0,
+        'RejectedSubmissions': 0,
       };
     }
   }

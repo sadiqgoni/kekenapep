@@ -1,9 +1,5 @@
-// ignore_for_file: unused_field, use_build_context_synchronously
-
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:keke_fairshare/index.dart';
 
 class FareManagementPage extends StatefulWidget {
   const FareManagementPage({super.key});
@@ -15,40 +11,37 @@ class FareManagementPage extends StatefulWidget {
 
 class _FareManagementPageState extends State<FareManagementPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  DocumentSnapshot? _lastDocument;
-  bool _hasMore = true;
-  String _selectedFilter = 'pending'; // Default filter
-  bool _isLoading = false;
+  String _selectedFilter = 'Pending'; // Default filter
   final TextEditingController _rejectionReasonController =
       TextEditingController();
   @override
   void initState() {
     super.initState();
-    _selectedFilter = 'pending';
-    // updateFareStatusTopending();
+    _selectedFilter = 'Pending';
+    // updateFareStatusToPending();
   }
 
-  Future<void> updateFareStatusTopending() async {
+  Future<void> updateFareStatusToPending() async {
     try {
       // Fetch the existing fare documents from Firestore
       final fares = await FirebaseFirestore.instance.collection('fares').get();
 
       // Loop through each document in the 'fares' collection
       for (var fare in fares.docs) {
-        final status = fare['status']; // Get the current status field value
+// Get the current status field value
 
-        // Update the status field to 'pending' for each fare document
+        // Update the status field to 'Pending' for each fare document
         await fare.reference.update({
-          'status': 'pending', // Update status to 'pending'
+          'status': 'Pending', // Update status to 'Pending'
         });
 
-        print('Updated status to pending for fare with ID: ${fare.id}');
+        print('Updated status to Pending for fare with ID: ${fare.id}');
       }
 
       // Optionally, show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('All fare statuses updated to pending.',
+          content: Text('All fare statuses updated to Pending.',
               style: GoogleFonts.poppins()),
           backgroundColor: Colors.green,
         ),
@@ -75,7 +68,7 @@ class _FareManagementPageState extends State<FareManagementPage> {
         actions: [
           DropdownButton<String>(
             value: _selectedFilter,
-            items: ['All', 'pending', 'Approved', 'Rejected']
+            items: ['All', 'Pending', 'Approved', 'Rejected']
                 .map((String value) => DropdownMenuItem<String>(
                       value: value,
                       child: Text(value, style: GoogleFonts.poppins()),
@@ -160,7 +153,7 @@ class _FareManagementPageState extends State<FareManagementPage> {
             Row(
               children: [
                 Text('Status: ', style: GoogleFonts.poppins()),
-                _buildStatusChip(data['status'] ?? 'pending'),
+                _buildStatusChip(data['status'] ?? 'Pending'),
               ],
             ),
           ],
@@ -307,7 +300,6 @@ class _FareManagementPageState extends State<FareManagementPage> {
 
   Future<void> _updateFareStatus(String fareId, String status,
       {String? reason}) async {
-    setState(() => _isLoading = true);
     try {
       // Update main fare document
       final fareRef = _firestore.collection('fares').doc(fareId);
@@ -352,8 +344,6 @@ class _FareManagementPageState extends State<FareManagementPage> {
           backgroundColor: Colors.red,
         ),
       );
-    } finally {
-      setState(() => _isLoading = false);
-    }
+    } finally {}
   }
 }

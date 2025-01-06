@@ -1,7 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:keke_fairshare/admin/screens/dashboard_screen.dart';
-import 'package:keke_fairshare/services/admin_service.dart';
+import 'package:keke_fairshare/index.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -21,15 +18,15 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   @override
   void initState() {
     super.initState();
-    _checkAdminStatus();
+    // _checkAdminStatus();
   }
 
-  Future<void> _checkAdminStatus() async {
-    final isAdmin = await _adminService.isCurrentUserAdmin();
-    if (isAdmin && mounted) {
-      Navigator.pushReplacementNamed(context, '/admin/dashboard');
-    }
-  }
+  // Future<void> _checkAdminStatus() async {
+  //   final isAdmin = await _adminService.isCurrentUserAdmin();
+  //   if (isAdmin && mounted) {
+  //     Navigator.pushReplacementNamed(context, '/admin/dashboard');
+  //   }
+  // }
 
   Future<void> _handleAuthentication() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -92,7 +89,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isCreatingAccount ? 'Create Admin Account' : 'Admin Login'),
+        title:
+            Text(_isCreatingAccount ? 'Create Admin Account' : 'Admin Login'),
         automaticallyImplyLeading: false, // Remove back arrow
       ),
       body: Padding(

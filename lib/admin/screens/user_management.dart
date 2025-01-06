@@ -1,10 +1,5 @@
 import 'dart:async';
-
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:keke_fairshare/services/user_management_service.dart';
-import 'package:timeago/timeago.dart' as timeago;
+import 'package:keke_fairshare/index.dart';
 
 class UserManagementPage extends StatefulWidget {
   const UserManagementPage({super.key});
@@ -24,13 +19,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
   bool _hasMore = true;
   String _sortBy = 'createdAt';
   bool _sortDescending = true;
-
-  final List<Map<String, String>> _sortOptions = [
-    {'value': 'createdAt', 'label': 'Join Date'},
-    {'value': 'points', 'label': 'Points'},
-    {'value': 'totalSubmissions', 'label': 'Total Submissions'},
-    {'value': 'approvedSubmissions', 'label': 'Approved Submissions'},
-  ];
 
   @override
   void initState() {
@@ -499,7 +487,7 @@ class _UserDetailsSheet extends StatelessWidget {
                   _buildStatItem('Submissions',
                       userStats['totalSubmissions']?.toString() ?? '0'),
                   _buildStatItem('Approved',
-                      userStats['approvedSubmissions']?.toString() ?? '0'),
+                      userStats['ApprovedSubmissions']?.toString() ?? '0'),
                 ],
               ),
             ],
@@ -574,20 +562,20 @@ class _UserDetailsSheet extends StatelessWidget {
                 vertical: 8,
               ),
               leading: CircleAvatar(
-                backgroundColor: submission['status'] == 'approved'
+                backgroundColor: submission['status'] == 'Approved'
                     ? Colors.green[100]
-                    : submission['status'] == 'rejected'
+                    : submission['status'] == 'Rejected'
                         ? Colors.red[100]
                         : Colors.orange[100],
                 child: Icon(
-                  submission['status'] == 'approved'
+                  submission['status'] == 'Approved'
                       ? Icons.check_circle
-                      : submission['status'] == 'rejected'
+                      : submission['status'] == 'Rejected'
                           ? Icons.cancel
                           : Icons.pending,
-                  color: submission['status'] == 'approved'
+                  color: submission['status'] == 'Approved'
                       ? Colors.green
-                      : submission['status'] == 'rejected'
+                      : submission['status'] == 'Rejected'
                           ? Colors.red
                           : Colors.orange,
                 ),
@@ -605,9 +593,9 @@ class _UserDetailsSheet extends StatelessWidget {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: submission['status'] == 'approved'
+                      color: submission['status'] == 'Approved'
                           ? Colors.green[100]
-                          : submission['status'] == 'rejected'
+                          : submission['status'] == 'Rejected'
                               ? Colors.red[100]
                               : Colors.orange[100],
                       borderRadius: BorderRadius.circular(12),
@@ -617,9 +605,9 @@ class _UserDetailsSheet extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: submission['status'] == 'approved'
+                        color: submission['status'] == 'Approved'
                             ? Colors.green[700]
-                            : submission['status'] == 'rejected'
+                            : submission['status'] == 'Rejected'
                                 ? Colors.red[700]
                                 : Colors.orange[700],
                       ),

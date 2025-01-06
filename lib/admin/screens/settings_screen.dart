@@ -1,8 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:keke_fairshare/admin/auth/login_screen.dart';
+import 'package:keke_fairshare/index.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -27,7 +23,7 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        final doc = await _firestore.collection('users').doc(user.uid).get();
+        final doc = await _firestore.collection('admin').doc(user.uid).get();
         setState(() {
           _adminData = doc.data();
           _isLoading = false;
