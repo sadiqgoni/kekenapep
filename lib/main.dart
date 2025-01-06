@@ -1,10 +1,4 @@
-import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/material.dart';
-import 'package:keke_fairshare/screens/auth/auth_gate.dart';
-import 'package:keke_fairshare/admin/auth/login_screen.dart';
-import 'package:keke_fairshare/admin/screens/dashboard_screen.dart';
-import 'package:keke_fairshare/firebase_options.dart';
-import 'package:keke_fairshare/theme.dart';
+import 'package:keke_fairshare/index.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,8 +19,8 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const AuthGate(),
-        '/admin': (context) => const AdminLoginScreen(),
-        '/admin/dashboard': (context) => const AdminDashboardScreen(),
+        // '/admin': (context) => const AdminLoginScreen(),
+        // '/admin/dashboard': (context) => const AdminDashboardScreen(),
       },
       onUnknownRoute: (settings) {
         return MaterialPageRoute(

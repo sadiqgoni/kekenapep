@@ -5,25 +5,13 @@ class AdminService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Simple check if the current user is admin
-  Future<bool> isCurrentUserAdmin() async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) return false;
-
-      final userDoc = await _firestore.collection('users').doc(user.uid).get();
-      return userDoc.data()?['role'] == 'admin';
-    } catch (e) {
-      print('Error checking admin status: $e');
-      return false;
-    }
-  }
+  // Admin-specific collection
+  CollectionReference get _adminCollection => _firestore.collection('admin');
 
   // Create a new admin account
   Future<UserCredential> createAdminAccount(
       String email, String password) async {
     try {
-      // Check if email is already registered
       final methods = await _auth.fetchSignInMethodsForEmail(email);
       if (methods.isNotEmpty) {
         throw 'An account with this email already exists';
@@ -34,10 +22,8 @@ class AdminService {
         password: password,
       );
 
-      // Set the user's role as admin in Firestore
-      await _firestore.collection('users').doc(userCredential.user!.uid).set({
+      await _adminCollection.doc(userCredential.user!.uid).set({
         'email': email,
-        'role': 'admin',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -64,7 +50,7 @@ class AdminService {
     }
   }
 
-  // Sign in and verify admin role
+  // Admin sign-in
   Future<bool> signInAsAdmin(String email, String password) async {
     try {
       final userCredential = await _auth.signInWithEmailAndPassword(
@@ -74,16 +60,9 @@ class AdminService {
 
       if (userCredential.user == null) return false;
 
-      // Verify admin role
-      final userDoc = await _firestore
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .get();
-
-      final isAdmin = userDoc.data()?['role'] == 'admin';
-
-      // If not admin, sign out
-      if (!isAdmin) {
+      final adminDoc =
+          await _adminCollection.doc(userCredential.user!.uid).get();
+      if (!adminDoc.exists) {
         await _auth.signOut();
         throw 'This account does not have admin privileges';
       }
@@ -114,12 +93,13 @@ class AdminService {
     }
   }
 
-  // Get admin dashboard stats
-  Future<Map<String, dynamic>> getAdminStats() async {
+  // Get admin-specific stats
+  Future<Object> getAdminStats() async {
     try {
-      final stats = await _firestore.collection('stats').doc('admin').get();
+      final stats = await _adminCollection.doc('stats').get();
       return stats.data() ?? {};
     } catch (e) {
+      print('Error fetching admin stats: $e');
       return {};
     }
   }
@@ -134,16 +114,7 @@ class AdminService {
           .get();
       return query.count ?? 0;
     } catch (e) {
-      return 0;
-    }
-  }
-
-  // Get total users count
-  Future<int> getTotalUsersCount() async {
-    try {
-      final query = await _firestore.collection('users').count().get();
-      return query.count ?? 0;
-    } catch (e) {
+      print('Error fetching pending fares count: $e');
       return 0;
     }
   }
@@ -153,33 +124,22 @@ class AdminService {
       {String? rejectionReason}) async {
     try {
       final fareRef = _firestore.collection('fares').doc(fareId);
-
-      // Get the current fare data
       final fareDoc = await fareRef.get();
+
       if (!fareDoc.exists) {
         throw 'Fare not found';
       }
 
-      // Create or update metadata
-      final currentMetadata =
-          (fareDoc.data()?['metadata'] as Map<String, dynamic>?) ?? {};
       final updatedMetadata = {
-        ...currentMetadata,
+        ...fareDoc.data()?['metadata'] ?? {},
         'status': status,
         'reviewedBy': _auth.currentUser?.uid,
         'reviewedAt': FieldValue.serverTimestamp(),
+        if (rejectionReason != null) 'rejectionReason': rejectionReason,
       };
 
-      if (rejectionReason != null && rejectionReason.isNotEmpty) {
-        updatedMetadata['rejectionReason'] = rejectionReason;
-      }
+      await fareRef.update({'metadata': updatedMetadata});
 
-      // Update the document with the new metadata
-      await fareRef.update({
-        'metadata': updatedMetadata,
-      });
-
-      // Update user stats if status changed to approved
       if (status == 'Approved') {
         final userId = fareDoc.data()?['userId'];
         if (userId != null) {
@@ -187,17 +147,13 @@ class AdminService {
           final userDoc = await userRef.get();
 
           if (userDoc.exists) {
-            final currentStats =
-                (userDoc.data()?['stats'] as Map<String, dynamic>?) ?? {};
-            final points = currentStats['points'] ?? 0;
-            final approvedSubmissions =
-                currentStats['approvedSubmissions'] ?? 0;
-
+            final currentStats = userDoc.data()?['stats'] ?? {};
             await userRef.update({
               'stats': {
                 ...currentStats,
-                'points': points + 1,
-                'approvedSubmissions': approvedSubmissions + 1,
+                'points': (currentStats['points'] ?? 0) + 1,
+                'approvedSubmissions':
+                    (currentStats['approvedSubmissions'] ?? 0) + 1,
               }
             });
           }
@@ -205,53 +161,6 @@ class AdminService {
       }
     } catch (e) {
       print('Error updating fare status: $e');
-      rethrow;
-    }
-  }
-
-  // Create first admin account if none exists
-  Future<bool> createFirstAdmin(String email, String password) async {
-    try {
-      // Check if any admin exists
-      final adminSnapshot =
-          await _firestore.collection('admins').limit(1).get();
-      if (adminSnapshot.docs.isNotEmpty) {
-        return false; // Admin already exists
-      }
-
-      // Create admin account
-      final userCredential = await createAdminAccount(email, password);
-
-      // Add admin to Firestore
-      await _firestore.collection('admins').doc(userCredential.user!.uid).set({
-        'email': email,
-        'createdAt': Timestamp.now(),
-        'tokenExpiry': Timestamp.fromDate(
-          DateTime.now().add(const Duration(days: 30)),
-        ),
-        'isFirstAdmin': true,
-      });
-
-      return true;
-    } catch (e) {
-      print('Error creating first admin: $e');
-      return false;
-    }
-  }
-
-  // Refresh admin token periodically
-  Future<void> refreshAdminToken() async {
-    try {
-      final user = _auth.currentUser;
-      if (user == null) return;
-
-      await _firestore.collection('admins').doc(user.uid).update({
-        'tokenExpiry': Timestamp.fromDate(
-          DateTime.now().add(const Duration(hours: 12)),
-        ),
-        'lastRefresh': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
       rethrow;
     }
   }

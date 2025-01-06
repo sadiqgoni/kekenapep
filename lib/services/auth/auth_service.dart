@@ -10,7 +10,7 @@ class AuthService {
       String phone, String password, String fullName) async {
     try {
       final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: "$phone@kekefairshare.com", // Using phone as email
+        email: phone,
         password: password,
       );
 
@@ -52,7 +52,7 @@ class AuthService {
       String phone, String password) async {
     try {
       final userCredential = await _auth.signInWithEmailAndPassword(
-        email: "$phone@kekefairshare.com", // Using phone as email
+        email: phone,
         password: password,
       );
       return userCredential.user;

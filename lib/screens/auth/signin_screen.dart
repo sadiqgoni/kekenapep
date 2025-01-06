@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:keke_fairshare/screens/auth/register_screen.dart';
 import 'package:keke_fairshare/widgets/bottom_navbar.dart';
-import 'package:keke_fairshare/screens/home_screen.dart';
 import 'package:keke_fairshare/services/auth/auth_service.dart';
 import 'package:keke_fairshare/widgets/header_section.dart';
 import 'package:keke_fairshare/widgets/input_field.dart';
@@ -14,6 +13,7 @@ class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
 
   @override
+  // ignore: library_private_types_in_public_api
   _SignInScreenState createState() => _SignInScreenState();
 }
 
