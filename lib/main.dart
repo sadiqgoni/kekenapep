@@ -1,4 +1,5 @@
 import 'package:keke_fairshare/index.dart';
+import 'package:keke_fairshare/passenger/screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,8 +20,8 @@ class MyApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const AuthGate(),
-        // '/admin': (context) => const AdminLoginScreen(),
-        // '/admin/dashboard': (context) => const AdminDashboardScreen(),
+        '/admin': (context) => const AdminLoginScreen(),
+        '/admin/dashboard': (context) => const AdminDashboardScreen(),
       },
       onUnknownRoute: (settings) {
         return MaterialPageRoute(

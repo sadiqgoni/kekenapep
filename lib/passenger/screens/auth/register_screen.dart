@@ -1,11 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:keke_fairshare/passenger/screens/auth/signin_screen.dart';
-import 'package:keke_fairshare/passenger/screens/home_screen.dart';
-import 'package:keke_fairshare/widgets/header_section.dart';
-import 'package:keke_fairshare/widgets/input_field.dart';
-import 'package:keke_fairshare/passenger/services/auth/auth_service.dart';
+import 'package:keke_fairshare/index.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});

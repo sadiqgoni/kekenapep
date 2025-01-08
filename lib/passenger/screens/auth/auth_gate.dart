@@ -1,7 +1,4 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-import 'package:keke_fairshare/passenger/screens/auth/signin_screen.dart';
-import 'package:keke_fairshare/widgets/bottom_navbar.dart';
+import 'package:keke_fairshare/index.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -11,17 +8,20 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // If the user is logged in
+        // Check the connection state
         if (snapshot.connectionState == ConnectionState.active) {
           final user = snapshot.data;
+
+          // If no user is logged in
           if (user == null) {
-            return const SignInScreen(); // Redirect to sign-in
+            return OnboardingScreen(); // Navigate to onboarding
           } else {
-            return const BottomNavBar(); // Redirect to home
+            // If the user is logged in
+            return const BottomNavBar();
           }
         }
 
-        // While waiting for authentication
+        // While waiting for authentication state
         return const Scaffold(
           body: Center(
             child: CircularProgressIndicator(),

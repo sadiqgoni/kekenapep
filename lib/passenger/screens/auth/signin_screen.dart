@@ -1,13 +1,4 @@
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:keke_fairshare/passenger/screens/auth/register_screen.dart';
-import 'package:keke_fairshare/widgets/bottom_navbar.dart';
-import 'package:keke_fairshare/passenger/services/auth/auth_service.dart';
-import 'package:keke_fairshare/widgets/header_section.dart';
-import 'package:keke_fairshare/widgets/input_field.dart';
-
-import '../../../admin/auth/login_screen.dart';
+import 'package:keke_fairshare/index.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
