@@ -8,8 +8,12 @@ class AuthService {
   Future<User?> registerWithPhoneAndPassword(
       String phone, String password, String fullName) async {
     try {
+      // Append a domain to the phone number to mimic an email format
+      final emailFormattedPhone = "$phone@phone.com";
+
+      // Use the formatted phone as the "email"
       final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: phone,
+        email: emailFormattedPhone,
         password: password,
       );
 
@@ -50,10 +54,13 @@ class AuthService {
   Future<User?> signInWithPhoneAndPassword(
       String phone, String password) async {
     try {
+      final emailFormattedPhone = "$phone@phone.com";
+
       final userCredential = await _auth.signInWithEmailAndPassword(
-        email: phone,
+        email: emailFormattedPhone,
         password: password,
       );
+
       return userCredential.user;
     } on FirebaseAuthException catch (e) {
       String message;
@@ -146,10 +153,29 @@ class AuthService {
   // Sign out user
   Future<void> signOut() async {
     try {
-      await _auth.signOut();
+      final user = _auth.currentUser;
+      if (user != null) {
+        try {
+          // Try to update the user's status, but don't block sign out if it fails
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .update({
+            'lastSeen': FieldValue.serverTimestamp(),
+            'isOnline': false,
+          }).timeout(const Duration(seconds: 3));
+        } catch (_) {
+          // Ignore Firestore errors and proceed with sign out
+        }
+      }
+
+      // Always attempt to sign out
+      await Future.wait([
+        _auth.signOut(),
+        // Add any other cleanup tasks here
+      ]);
     } catch (e) {
-      print('Sign Out Error: $e');
-      throw e;
+      throw Exception('Failed to sign out: ${e.toString()}');
     }
   }
 }

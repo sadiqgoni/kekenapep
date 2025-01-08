@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:keke_fairshare/index.dart';
 import '../services/support_service.dart';
 
@@ -14,11 +16,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final SupportService _supportService = SupportService();
 
   late Stream<Map<String, dynamic>> _userDataStream;
+  StreamSubscription<Map<String, dynamic>>? _userDataSubscription;
 
   @override
   void initState() {
     super.initState();
     _userDataStream = getUserDataStream();
+    _userDataSubscription = _userDataStream.listen((_) {});
+  }
+
+  @override
+  void dispose() {
+    _userDataSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _updateProfile(Map<String, dynamic> updates) async {
@@ -162,6 +172,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .collection('users')
         .doc(user.uid)
         .snapshots()
+        .timeout(
+          const Duration(seconds: 5),
+          onTimeout: (sink) => sink.close(),
+        )
+        .handleError((error) {
+          print('Error in user data stream: $error');
+          return {};
+        })
         .map((snapshot) => snapshot.data() as Map<String, dynamic>? ?? {});
   }
 
@@ -246,7 +264,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   label: 'Log Out',
                   icon: Icons.logout,
                   color: Colors.red[400]!,
-                  onPressed: () => _authService.signOut(),
+                  onPressed: () async {
+                    try {
+                      // Cancel stream subscription first
+                      await _userDataSubscription?.cancel();
+                      _userDataSubscription = null;
+                      
+                      // Sign out
+                      await _authService.signOut();
+
+                      // Navigate to AuthGate after successful sign out
+                      if (mounted) {
+                        Navigator.of(context).pushAndRemoveUntil(
+                          MaterialPageRoute(
+                            builder: (context) => const AuthGate(),
+                          ),
+                          (route) => false, // Remove all previous routes
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        _showTopSnackBar(
+                          'Error signing out: ${e.toString()}',
+                          isError: true,
+                        );
+                      }
+                    }
+                  },
                 ),
               ],
             ),

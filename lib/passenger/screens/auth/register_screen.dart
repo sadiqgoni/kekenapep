@@ -33,6 +33,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       try {
         final authService = AuthService();
+        // Attempt to register the user
         User? user = await authService.registerWithPhoneAndPassword(
           _phoneController.text.trim(),
           _passwordController.text.trim(),
@@ -40,9 +41,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
 
         if (user != null) {
-          Navigator.pushReplacement(
+          // Navigate to BottomNavBar and remove all previous routes
+          Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            MaterialPageRoute(builder: (context) => const BottomNavBar()),
+            (route) => false, // Remove all previous routes
           );
         }
       } catch (e) {
