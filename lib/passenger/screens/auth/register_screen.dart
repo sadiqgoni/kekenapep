@@ -20,41 +20,109 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _confirmPasswordController =
       TextEditingController();
 
+  void _showTopSnackBar(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error : Icons.check_circle,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? Colors.red : Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        margin: EdgeInsets.only(
+          bottom: MediaQuery.of(context).size.height - 100,
+          left: 20,
+          right: 20,
+        ),
+      ),
+    );
+  }
+
+  String? _validatePhone(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Phone number is required';
+    }
+    // Remove any spaces or special characters
+    final cleanPhone = value.replaceAll(RegExp(r'[^0-9]'), '');
+    if (cleanPhone.length != 11) {
+      return 'Phone number must be 11 digits';
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Password is required';
+    }
+    if (value.length < 6) {
+      return 'Password must be at least 6 characters';
+    }
+    if (!value.contains(RegExp(r'[A-Z]'))) {
+      return 'Password must contain at least one uppercase letter';
+    }
+    if (!value.contains(RegExp(r'[0-9]'))) {
+      return 'Password must contain at least one number';
+    }
+    return null;
+  }
+
+  String? _validateConfirmPassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please confirm your password';
+    }
+    if (value != _passwordController.text) {
+      return 'Passwords do not match';
+    }
+    return null;
+  }
+
   void _register() async {
     if (_formKey.currentState!.validate()) {
-      if (_passwordController.text != _confirmPasswordController.text) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Passwords do not match!')),
-        );
-        return;
-      }
-
       setState(() => _isLoading = true);
 
       try {
         final authService = AuthService();
-        // Attempt to register the user
         User? user = await authService.registerWithPhoneAndPassword(
           _phoneController.text.trim(),
           _passwordController.text.trim(),
           _fullNameController.text.trim(),
         );
 
-        if (user != null) {
-          // Navigate to BottomNavBar and remove all previous routes
+        if (user != null && mounted) {
+          _showTopSnackBar('Registration successful!');
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (context) => const BottomNavBar()),
-            (route) => false, // Remove all previous routes
+            (route) => false,
           );
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        String errorMessage = 'Registration failed';
+        if (e.toString().contains('already exists')) {
+          errorMessage = 'This phone number is already registered';
+        } else if (e.toString().contains('invalid-phone')) {
+          errorMessage = 'Invalid phone number format';
+        }
+        _showTopSnackBar(errorMessage, isError: true);
       }
 
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -87,8 +155,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       icon: Icons.person_outline,
                       screenWidth: screenWidth,
                       controller: _fullNameController,
-                      validator: (value) =>
-                          value!.isEmpty ? 'Please enter your full name' : null,
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'Full name is required'
+                          : null,
                     ),
                     const SizedBox(height: 20),
                     InputField(
@@ -96,29 +165,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       icon: Icons.phone_outlined,
                       screenWidth: screenWidth,
                       controller: _phoneController,
-                      validator: (value) => value!.isEmpty
-                          ? 'Please enter your phone number'
-                          : null,
+                      keyboardType: TextInputType.phone,
+                      validator: _validatePhone,
                     ),
                     const SizedBox(height: 20),
                     InputField(
                       hintText: "Password",
                       icon: Icons.lock_outline,
                       screenWidth: screenWidth,
-                      obscureText: !_isPasswordVisible,
                       controller: _passwordController,
-                      validator: (value) => value!.length < 6
-                          ? 'Password must be at least 6 characters'
-                          : null,
+                      obscureText: !_isPasswordVisible,
+                      validator: _validatePassword,
                       suffixIcon: IconButton(
                         icon: Icon(
                           _isPasswordVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: const Color(0xFFFDB300),
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: Colors.grey,
                         ),
-                        onPressed: () => setState(
-                            () => _isPasswordVisible = !_isPasswordVisible),
+                        onPressed: () {
+                          setState(() {
+                            _isPasswordVisible = !_isPasswordVisible;
+                          });
+                        },
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -126,21 +195,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       hintText: "Confirm Password",
                       icon: Icons.lock_outline,
                       screenWidth: screenWidth,
-                      obscureText: !_isConfirmPasswordVisible,
                       controller: _confirmPasswordController,
-                      validator: (value) => value != _passwordController.text
-                          ? 'Passwords do not match'
-                          : null,
+                      obscureText: !_isConfirmPasswordVisible,
+                      validator: _validateConfirmPassword,
                       suffixIcon: IconButton(
                         icon: Icon(
                           _isConfirmPasswordVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: const Color(0xFFFDB300),
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: Colors.grey,
                         ),
-                        onPressed: () => setState(() =>
-                            _isConfirmPasswordVisible =
-                                !_isConfirmPasswordVisible),
+                        onPressed: () {
+                          setState(() {
+                            _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                          });
+                        },
                       ),
                     ),
                     const SizedBox(height: 40),

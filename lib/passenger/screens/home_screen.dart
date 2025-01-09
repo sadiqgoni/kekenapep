@@ -64,24 +64,23 @@ class _HomeScreenState extends State<HomeScreen> {
       pinned: true,
       expandedHeight: 100.0,
       backgroundColor: Colors.yellow[700],
-      flexibleSpace: FlexibleSpaceBar(
-        title: FittedBox(
-          fit: BoxFit.contain,
-          alignment: Alignment.center,
-          child: Text(
+      flexibleSpace: Center(
+        child: FlexibleSpaceBar(
+          title: Text(
             'KeKe FairShare',
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.bold,
+              fontSize: 20,
               color: Colors.black87,
             ),
           ),
-        ),
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Colors.yellow[600]!, Colors.yellow[800]!],
+          background: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Colors.yellow[600]!, Colors.yellow[800]!],
+              ),
             ),
           ),
         ),

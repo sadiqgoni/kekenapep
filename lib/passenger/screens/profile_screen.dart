@@ -177,10 +177,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onTimeout: (sink) => sink.close(),
         )
         .handleError((error) {
-          print('Error in user data stream: $error');
-          return {};
-        })
-        .map((snapshot) => snapshot.data() as Map<String, dynamic>? ?? {});
+      print('Error in user data stream: $error');
+      return {};
+    }).map((snapshot) => snapshot.data() as Map<String, dynamic>? ?? {});
   }
 
   Future<void> updateUserProfile(Map<String, dynamic> updates) async {
@@ -236,7 +235,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildInfoTile(
                   icon: Icons.phone,
                   title: 'Phone',
-                  subtitle: userData['phone'] ?? 'Not available',
+                  subtitle: userData['phoneNumber'] ?? 'Not available',
                 ),
                 const SizedBox(height: 24),
                 _buildSectionHeader('Settings'),
@@ -269,7 +268,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       // Cancel stream subscription first
                       await _userDataSubscription?.cancel();
                       _userDataSubscription = null;
-                      
+
                       // Sign out
                       await _authService.signOut();
 
@@ -343,7 +342,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            userData['phone'] ?? 'No Phone',
+            userData['phoneNumber'] ?? 'No Phone',
             style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey[600]),
           ),
         ],

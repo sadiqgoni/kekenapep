@@ -61,29 +61,52 @@ class _FareManagementPageState extends State<FareManagementPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Fare Management',
-            style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.yellow[700],
-        actions: [
-          DropdownButton<String>(
-            value: _selectedFilter,
-            items: ['All', 'Pending', 'Approved', 'Rejected']
-                .map((String value) => DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value, style: GoogleFonts.poppins()),
-                    ))
-                .toList(),
-            onChanged: (String? newValue) {
-              if (newValue != null) {
-                setState(() {
-                  _selectedFilter = newValue;
-                });
-              }
-            },
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF4776E6), // Rich blue
+                Color(0xFF8E54E9), // Purple
+              ],
+            ),
           ),
-          const SizedBox(width: 16),
-        ],
+          child: AppBar(
+            title: Text(
+              'Fare Management',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                color:
+                    const Color(0xFF2C3E50), // Dark blue-gray from your scheme
+              ),
+            ),
+            backgroundColor:
+                Colors.transparent, // Important for gradient effect
+            elevation: 0,
+            actions: [
+              DropdownButton<String>(
+                value: _selectedFilter,
+                items: ['All', 'Pending', 'Approved', 'Rejected']
+                    .map((String value) => DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value, style: GoogleFonts.poppins()),
+                        ))
+                    .toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _selectedFilter = newValue;
+                    });
+                  }
+                },
+              ),
+              const SizedBox(width: 16),
+            ],
+          ),
+        ),
       ),
       body: _buildFaresList(),
     );

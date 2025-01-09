@@ -34,6 +34,12 @@ service cloud.firestore {
         allow read: if isAuthenticated();
         allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       }
+
+      // Submissions subcollection
+      match /submissions/{submissionId} {
+        allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow write: if isAuthenticated() && request.auth.uid == userId;
+      }
     }
     
     // Fares collection
@@ -47,9 +53,8 @@ service cloud.firestore {
     // Routes collection
     match /routes/{routeId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && isAdmin();
-      allow delete: if false;
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated() && isAdmin();
     }
     
     // Logs collection

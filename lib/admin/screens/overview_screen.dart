@@ -70,6 +70,7 @@ class _OverviewPageState extends State<OverviewPage>
           'Admin Dashboard',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.bold,
+            fontSize: 20,
             color: const Color(0xFF2C3E50), // Dark blue-gray for text
           ),
         ),
@@ -133,7 +134,7 @@ class _OverviewPageState extends State<OverviewPage>
                       child: Text(
                         userName,
                         style: GoogleFonts.poppins(
-                          fontSize: 24,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: const Color(
                               0xFF4776E6), // Matching blue from AppBar

@@ -424,10 +424,9 @@ class _UserDetailsSheet extends StatelessWidget {
                 radius: 30,
                 backgroundColor: const Color(0xFF4776E6),
                 child: Text(
-                  (userDetails['fullName'] as String?)
-                          ?.substring(0, 1)
-                          .toUpperCase() ??
-                      '?',
+                  ((userDetails['fullName'] as String?) ?? 'U')
+                      .substring(0, 1)
+                      .toUpperCase(),
                   style: GoogleFonts.poppins(
                     color: Colors.white,
                     fontSize: 24,
@@ -440,14 +439,14 @@ class _UserDetailsSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      userDetails['fullName'] ?? 'Unknown',
+                      (userDetails['fullName'] as String?) ?? 'Unknown User',
                       style: GoogleFonts.poppins(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
-                      userDetails['email'] ?? '',
+                      (userDetails['phoneNumber'] as String?) ?? 'No Phone',
                       style: GoogleFonts.poppins(
                         color: Colors.grey[600],
                       ),
