@@ -84,8 +84,20 @@ class _UserManagementPageState extends State<UserManagementPage> {
   }
 
   Future<void> _showUserDetails(String userId) async {
+    // print('Showing details for user ID: $userId');
     final userDetails = await _userService.getUserDetails(userId);
-    final userStats = await _userService.getUserStats(userId);
+    // print('Got user details: $userDetails');
+
+    if (userDetails.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Error loading user details'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     if (!mounted) return;
 
@@ -95,7 +107,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
       backgroundColor: Colors.transparent,
       builder: (context) => _UserDetailsSheet(
         userDetails: userDetails,
-        userStats: userStats,
+        userStats: userDetails['stats'] ?? {},
         onDelete: () async {
           Navigator.pop(context);
           await _confirmAndDeleteUser(userId);
@@ -159,8 +171,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFF4776E6), // Rich blue
-                Color(0xFF8E54E9), // Purple
+                Color(0xFF4776E6),
+                Color(0xFF8E54E9),
               ],
             ),
           ),
@@ -169,12 +181,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
               'User Management',
               style: GoogleFonts.poppins(
                 fontWeight: FontWeight.bold,
-                color:
-                    const Color(0xFF2C3E50), // Dark blue-gray from your scheme
+                color: const Color(0xFF2C3E50),
               ),
             ),
-            backgroundColor:
-                Colors.transparent, // Important for gradient effect
+            backgroundColor: Colors.transparent,
             elevation: 0,
           ),
         ),
@@ -224,10 +234,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
               fillColor: const Color(0xFFF8F9FF),
             ),
             onChanged: (value) {
-              if (_debounce?.isActive ?? false) _debounce!.cancel();
-              _debounce = Timer(const Duration(milliseconds: 500), () {
-                _loadUsers(refresh: true);
-              });
+              // if (_debounce?.isActive ?? false) _debounce!.cancel();
+              // _debounce = Timer(const Duration(milliseconds: 500), () {
+              //   _loadUsers(refresh: true);
+              // });
             },
           ),
           const SizedBox(height: 8),
@@ -290,58 +300,138 @@ class _UserManagementPageState extends State<UserManagementPage> {
   Widget _buildUserList() {
     if (_users.isEmpty) {
       return Center(
-        child: Text(
-          'No users found',
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            color: Colors.grey[600],
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_search, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No users found',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       );
     }
 
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: _users.length + (_hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == _users.length) {
-          if (_isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          } else {
-            return const SizedBox.shrink();
-          }
+          return _isLoading
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).primaryColor,
+                      ),
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink();
         }
 
         final user = _users[index].data() as Map<String, dynamic>;
         final userId = _users[index].id;
 
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: const Color(0xFFFDB300),
-              child: Text(
-                (user['fullName'] as String).isNotEmpty
-                    ? (user['fullName'] as String)[0].toUpperCase()
-                    : '?',
-                style: GoogleFonts.poppins(
-                  color: Colors.black,
-                  fontWeight: FontWeight.bold,
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => _showUserDetails(userId),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    _buildUserAvatar(user),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  user['fullName'] ?? 'Unknown',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF2C3E50),
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color:
+                                      const Color(0xFF4776E6).withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '${user['points'] ?? 0} pts',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF4776E6),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            user['phoneNumber'] ?? 'Not available',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              _buildStatBadge(
+                                Icons.directions_car,
+                                '${user['stats']?['totalSubmissions'] ?? 0}',
+                                'Rides',
+                              ),
+                              const SizedBox(width: 12),
+                              _buildStatBadge(
+                                Icons.check_circle,
+                                '${user['stats']?['ApprovedSubmissions'] ?? 0}',
+                                'Approved',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-            title: Text(
-              user['fullName'] ?? 'Unknown',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              'Phone: ${user['phoneNumber'] ?? 'Not available'}',
-              style: GoogleFonts.poppins(),
-            ),
-            trailing: IconButton(
-              icon: const Icon(Icons.more_vert),
-              onPressed: () => _showUserDetails(userId),
             ),
           ),
         );
@@ -349,11 +439,72 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
 
-  Widget _buildLoadingIndicator() {
+  Widget _buildUserAvatar(Map<String, dynamic> user) {
     return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4776E6), Color(0xFF8E54E9)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Center(
+        child: Text(
+          (user['fullName'] as String?)?.isNotEmpty == true
+              ? (user['fullName'] as String).substring(0, 1).toUpperCase()
+              : '?',
+          style: GoogleFonts.poppins(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatBadge(IconData icon, String value, String label) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: Colors.grey[600],
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '$value $label',
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDeleteButton() {
+    return Padding(
       padding: const EdgeInsets.all(16),
-      alignment: Alignment.center,
-      child: const CircularProgressIndicator(),
+      child: ElevatedButton(
+        onPressed: () {},
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+        child: Text(
+          'Delete User',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -375,26 +526,33 @@ class _UserDetailsSheet extends StatelessWidget {
       height: MediaQuery.of(context).size.height * 0.8,
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
           _buildHandle(),
           _buildHeader(),
-          const Divider(),
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  _buildStats(),
-                  const Divider(),
-                  _buildSubmissions(),
-                  const SizedBox(height: 16),
-                  _buildDeleteButton(),
-                ],
-              ),
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(child: _buildStats()),
+                SliverToBoxAdapter(child: _buildSubmissionsHeader()),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) => _buildSubmissionItem(
+                      (userDetails['submissions'] as List<dynamic>)[index]
+                          as Map<String, dynamic>,
+                    ),
+                    childCount: (userDetails['submissions'] as List<dynamic>?)
+                            ?.length ??
+                        0,
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
             ),
           ),
+          _buildBottomActions(),
         ],
       ),
     );
@@ -402,59 +560,78 @@ class _UserDetailsSheet extends StatelessWidget {
 
   Widget _buildHandle() {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 12),
       height: 4,
       width: 40,
       decoration: BoxDecoration(
-        color: const Color(0xFF8E54E9), // Purple from gradient
+        color: Colors.grey[300],
         borderRadius: BorderRadius.circular(2),
       ),
     );
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
         children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: const Color(0xFF4776E6),
-                child: Text(
-                  ((userDetails['fullName'] as String?) ?? 'U')
-                      .substring(0, 1)
-                      .toUpperCase(),
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4776E6), Color(0xFF8E54E9)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Center(
+              child: Text(
+                (userDetails['fullName'] as String?)?.isNotEmpty == true
+                    ? (userDetails['fullName'] as String)[0].toUpperCase()
+                    : 'U',
+                style: GoogleFonts.poppins(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userDetails['fullName'] ?? 'Unknown User',
                   style: GoogleFonts.poppins(
-                    color: Colors.white,
                     fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF2C3E50),
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      (userDetails['fullName'] as String?) ?? 'Unknown User',
-                      style: GoogleFonts.poppins(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      (userDetails['phoneNumber'] as String?) ?? 'No Phone',
-                      style: GoogleFonts.poppins(
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  userDetails['phoneNumber'] ?? 'No Phone',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -462,37 +639,37 @@ class _UserDetailsSheet extends StatelessWidget {
   }
 
   Widget _buildStats() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Statistics',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildStatItem(
-                      'Points', userStats['points']?.toString() ?? '0'),
-                  _buildStatItem('Submissions',
-                      userStats['totalSubmissions']?.toString() ?? '0'),
-                  _buildStatItem('Approved',
-                      userStats['ApprovedSubmissions']?.toString() ?? '0'),
-                ],
-              ),
-            ],
-          ),
+    return Container(
+      margin: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4776E6), Color(0xFF8E54E9)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(24),
       ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildStatItem('Points', userStats['points']?.toString() ?? '0'),
+          _buildVerticalDivider(),
+          _buildStatItem(
+              'Rides', userStats['totalSubmissions']?.toString() ?? '0'),
+          _buildVerticalDivider(),
+          _buildStatItem(
+              'Approved', userStats['ApprovedSubmissions']?.toString() ?? '0'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerticalDivider() {
+    return Container(
+      height: 40,
+      width: 1,
+      color: Colors.white.withOpacity(0.2),
     );
   }
 
@@ -504,148 +681,153 @@ class _UserDetailsSheet extends StatelessWidget {
           style: GoogleFonts.poppins(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: const Color(0xFF4776E6),
+            color: Colors.white,
           ),
         ),
         Text(
           label,
           style: GoogleFonts.poppins(
-            color: Colors.grey[600],
+            color: Colors.white.withOpacity(0.8),
+            fontSize: 14,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildSubmissions() {
-    final submissions = (userDetails['submissions'] as List<dynamic>?) ?? [];
-
-    if (submissions.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Center(
-          child: Text(
-            'No submissions yet',
-            style: TextStyle(
-              color: Colors.grey,
-              fontSize: 16,
-            ),
-          ),
+  Widget _buildSubmissionsHeader() {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(
+        'Recent Submissions',
+        style: GoogleFonts.poppins(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: const Color(0xFF2C3E50),
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Text(
-            'Recent Submissions',
-            style: GoogleFonts.poppins(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-            ),
+  Widget _buildSubmissionItem(Map<String, dynamic> submission) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-        ),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: submissions.length,
-          separatorBuilder: (context, index) => const Divider(height: 1),
-          itemBuilder: (context, index) {
-            final submission = submissions[index] as Map<String, dynamic>;
-            return ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
-              leading: CircleAvatar(
-                backgroundColor: submission['status'] == 'Approved'
-                    ? Colors.green[100]
-                    : submission['status'] == 'Rejected'
-                        ? Colors.red[100]
-                        : Colors.orange[100],
-                child: Icon(
-                  submission['status'] == 'Approved'
-                      ? Icons.check_circle
-                      : submission['status'] == 'Rejected'
-                          ? Icons.cancel
-                          : Icons.pending,
-                  color: submission['status'] == 'Approved'
-                      ? Colors.green
-                      : submission['status'] == 'Rejected'
-                          ? Colors.red
-                          : Colors.orange,
-                ),
-              ),
-              title: Row(
-                children: [
-                  Text(
-                    'Points: ${submission['points'] ?? 0}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: submission['status'] == 'Approved'
-                          ? Colors.green[100]
-                          : submission['status'] == 'Rejected'
-                              ? Colors.red[100]
-                              : Colors.orange[100],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      submission['status']?.toUpperCase() ?? 'UNKNOWN',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: submission['status'] == 'Approved'
-                            ? Colors.green[700]
-                            : submission['status'] == 'Rejected'
-                                ? Colors.red[700]
-                                : Colors.orange[700],
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${submission['source']} → ${submission['destination']}',
+                      style: GoogleFonts.poppins(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '₦${submission['fareAmount']}',
+                      style: GoogleFonts.poppins(
+                        color: const Color(0xFF4776E6),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _getStatusColor(submission['status'] ?? 'Unknown')
+                      .withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  submission['status'] ?? 'Unknown',
+                  style: GoogleFonts.poppins(
+                    color: _getStatusColor(submission['status'] ?? 'Unknown'),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
                   ),
-                ],
+                ),
               ),
-              subtitle: Text(
-                'Submitted: ${submission['formattedDate'] ?? 'Unknown'}',
-                style: const TextStyle(fontSize: 12),
-              ),
-            );
-          },
-        ),
-      ],
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            submission['formattedDate'] ?? '',
+            style: GoogleFonts.poppins(
+              color: Colors.grey[600],
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildDeleteButton() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
+  Widget _buildBottomActions() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            offset: const Offset(0, -4),
+            blurRadius: 10,
+          ),
+        ],
+      ),
       child: ElevatedButton(
         onPressed: onDelete,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red,
+          backgroundColor: const Color(0xFFFF4B4B),
+          foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
         child: Text(
           'Delete User',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
+            fontSize: 16,
           ),
         ),
       ),
     );
   }
-}
 
-Timer? _debounce;
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return const Color(0xFF34C759);
+      case 'pending':
+        return const Color(0xFFFF9500);
+      case 'rejected':
+        return const Color(0xFFFF3B30);
+      default:
+        return const Color(0xFF8E8E93);
+    }
+  }
+}

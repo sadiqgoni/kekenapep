@@ -7,7 +7,13 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return get(/databases/$(database)/documents/admin/$(request.auth.uid)).data != null;
+    }
+
+    // Admin collection
+    match /admin/{adminId} {
+      allow read: if isAuthenticated() && request.auth.uid == adminId;
+      allow write: if false;  // Admin documents should only be created through backend
     }
 
     // Users collection

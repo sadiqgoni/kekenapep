@@ -13,10 +13,46 @@ class UserManagementService {
     String sortBy = 'createdAt',
     bool descending = true,
   }) async {
-    Query query = _firestore.collection('users');
-    // .where('role', isNotEqualTo: 'admin');
+    if (sortBy == 'points') {
+      // First get all users
+      final usersQuery = await _firestore.collection('users').get();
+      final List<Future<DocumentSnapshot>> statsFutures = usersQuery.docs
+          .map((doc) =>
+              doc.reference.collection('statistics').doc('overview').get())
+          .toList();
 
-    // Apply search if query provided
+      final List<DocumentSnapshot> statsSnapshots =
+          await Future.wait(statsFutures);
+
+      // Combine user data with their stats
+      final List<Map<String, dynamic>> usersWithStats = [];
+      for (var i = 0; i < usersQuery.docs.length; i++) {
+        final userData = usersQuery.docs[i].data();
+        final statsData = statsSnapshots[i].data() as Map<String, dynamic>?;
+        usersWithStats.add({
+          'doc': usersQuery.docs[i],
+          'points': statsData?['points'] ?? 0,
+        });
+      }
+
+      // Sort by points
+      usersWithStats.sort((a, b) {
+        final pointsA = a['points'] as int;
+        final pointsB = b['points'] as int;
+        return descending
+            ? pointsB.compareTo(pointsA)
+            : pointsA.compareTo(pointsB);
+      });
+
+      // Return sorted documents
+      return usersWithStats
+          .map((item) => item['doc'] as QueryDocumentSnapshot)
+          .toList();
+    }
+
+    // For other sort fields, use regular query
+    Query query = _firestore.collection('users');
+
     if (searchQuery != null && searchQuery.isNotEmpty) {
       query = query
           .orderBy('fullName')
@@ -24,10 +60,8 @@ class UserManagementService {
               [searchQuery.toLowerCase() + '\uf8ff']);
     }
 
-    // Apply sorting
     query = query.orderBy(sortBy, descending: descending);
 
-    // Retrieve initial results
     if (lastDocument != null) {
       query = query.startAfterDocument(lastDocument);
     }
@@ -94,16 +128,33 @@ class UserManagementService {
   // Get user details including submissions
   Future<Map<String, dynamic>> getUserDetails(String userId) async {
     try {
+      print('Getting user details for userId: $userId');
       final userDoc = await _firestore.collection('users').doc(userId).get();
+      print('User doc exists: ${userDoc.exists}');
+      
+      if (!userDoc.exists) {
+        print('User document does not exist');
+        return {};
+      }
+      
       final userData = userDoc.data() ?? {};
+      print('User data: $userData');
 
       // Get user's submissions with status
-      final submissions = await _firestore
+      final submissionsQuery = _firestore
           .collection('fares')
-          .where('userId', isEqualTo: userId)
-          .orderBy('timestamp', descending: true)
-          .limit(50) // Limit to recent 50 submissions
-          .get();
+          .where('submitter.uid', isEqualTo: userId)
+          .orderBy('metadata.createdAt', descending: true)
+          .limit(50);
+      
+      print('Submissions query: ${submissionsQuery.parameters}');
+      
+      final submissions = await submissionsQuery.get();
+      print('Found ${submissions.docs.length} submissions');
+      
+      if (submissions.docs.isNotEmpty) {
+        print('First submission data: ${submissions.docs.first.data()}');
+      }
 
       // Calculate user points from submissions
       int totalPoints = 0;
@@ -115,10 +166,14 @@ class UserManagementService {
         totalPoints += points;
 
         submissionsList.add({
-          ...data,
           'id': doc.id,
-          'formattedDate': data['timestamp'] != null
-              ? (data['timestamp'] as Timestamp).toDate().toString()
+          'source': data['source'] ?? '',
+          'destination': data['destination'] ?? '',
+          'fareAmount': data['fareAmount'] ?? 0.0,
+          'status': data['metadata']?['status'] ?? 'Unknown',
+          'submittedAt': data['metadata']?['createdAt'],
+          'formattedDate': data['metadata']?['createdAt'] != null
+              ? (data['metadata']['createdAt'] as Timestamp).toDate().toString()
               : 'Unknown date',
         });
       }
@@ -130,19 +185,24 @@ class UserManagementService {
           .collection('statistics')
           .doc('overview')
           .get();
+      
+      print('Stats doc exists: ${statsDoc.exists}');
+      if (statsDoc.exists) {
+        print('Stats data: ${statsDoc.data()}');
+      }
 
       final stats = statsDoc.data() ??
           {
             'points': totalPoints,
             'totalSubmissions': submissions.docs.length,
             'ApprovedSubmissions': submissions.docs
-                .where((doc) => doc.data()['status'] == 'Approved')
+                .where((doc) => doc.data()['metadata']?['status'] == 'Approved')
                 .length,
             'PendingSubmissions': submissions.docs
-                .where((doc) => doc.data()['status'] == 'Pending')
+                .where((doc) => doc.data()['metadata']?['status'] == 'Pending')
                 .length,
             'RejectedSubmissions': submissions.docs
-                .where((doc) => doc.data()['status'] == 'Rejected')
+                .where((doc) => doc.data()['metadata']?['status'] == 'Rejected')
                 .length,
           };
 
@@ -156,27 +216,18 @@ class UserManagementService {
             .set(stats);
       }
 
-      // Get user's support requests instead of messages
-      final supportRequests = await _firestore
-          .collection('support_requests')
-          .where('userId', isEqualTo: userId)
-          // .where('status', isEqualTo: 'Pending')
-          .get();
-
-      return {
-        ...userData,
+      final result = {
+        ...userData,  // Include all user data
+        'id': userDoc.id,
         'submissions': submissionsList,
         'stats': stats,
-        'unreadMessages': supportRequests.docs
-            .map((doc) => {
-                  ...doc.data(),
-                  'id': doc.id,
-                })
-            .toList(),
-        'hasUnreadMessages': supportRequests.docs.isNotEmpty,
       };
-    } catch (e) {
+      
+      print('Final result: $result');
+      return result;
+    } catch (e, stackTrace) {
       print('Error getting user details: $e');
+      print('Stack trace: $stackTrace');
       return {};
     }
   }
@@ -192,7 +243,7 @@ class UserManagementService {
     // Delete user's submissions
     final submissions = await _firestore
         .collection('fares')
-        .where('userId', isEqualTo: userId)
+        .where('submitter.uid', isEqualTo: userId)
         .get();
 
     for (var doc in submissions.docs) {

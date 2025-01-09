@@ -11,136 +11,14 @@ class FareManagementPage extends StatefulWidget {
 
 class _FareManagementPageState extends State<FareManagementPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  String _selectedFilter = 'Pending'; // Default filter
+  String _selectedFilter = 'Pending';
   final TextEditingController _rejectionReasonController =
       TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _selectedFilter = 'Pending';
-    // updateFareStatusToPending();
-  }
-
-  Future<void> updateFareStatusToPending() async {
-    try {
-      // Fetch the existing fare documents from Firestore
-      final fares = await FirebaseFirestore.instance.collection('fares').get();
-
-      // Loop through each document in the 'fares' collection
-      for (var fare in fares.docs) {
-// Get the current status field value
-
-        // Update the status field to 'Pending' for each fare document
-        await fare.reference.update({
-          'status': 'Pending', // Update status to 'Pending'
-        });
-
-        print('Updated status to Pending for fare with ID: ${fare.id}');
-      }
-
-      // Optionally, show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('All fare statuses updated to Pending.',
-              style: GoogleFonts.poppins()),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      // Handle any errors
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error updating fare status: ${e.toString()}',
-              style: GoogleFonts.poppins()),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF4776E6), // Rich blue
-                Color(0xFF8E54E9), // Purple
-              ],
-            ),
-          ),
-          child: AppBar(
-            title: Text(
-              'Fare Management',
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.bold,
-                color:
-                    const Color(0xFF2C3E50), // Dark blue-gray from your scheme
-              ),
-            ),
-            backgroundColor:
-                Colors.transparent, // Important for gradient effect
-            elevation: 0,
-            actions: [
-              DropdownButton<String>(
-                value: _selectedFilter,
-                items: ['All', 'Pending', 'Approved', 'Rejected']
-                    .map((String value) => DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value, style: GoogleFonts.poppins()),
-                        ))
-                    .toList(),
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    setState(() {
-                      _selectedFilter = newValue;
-                    });
-                  }
-                },
-              ),
-              const SizedBox(width: 16),
-            ],
-          ),
-        ),
-      ),
-      body: _buildFaresList(),
-    );
-  }
-
-  Widget _buildFaresList() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _buildQuery(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-              child: Text('Error: ${snapshot.error}',
-                  style: GoogleFonts.poppins()));
-        }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return Center(
-              child: Text('No fare submissions available.',
-                  style: GoogleFonts.poppins()));
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: snapshot.data!.docs.length,
-          itemBuilder: (context, index) {
-            return _buildFareSubmissionCard(snapshot.data!.docs[index]);
-          },
-        );
-      },
-    );
   }
 
   Stream<QuerySnapshot> _buildQuery() {
@@ -154,6 +32,245 @@ class _FareManagementPageState extends State<FareManagementPage> {
     return query.orderBy('submittedAt', descending: true).limit(50).snapshots();
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kToolbarHeight),
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF4776E6),
+                Color(0xFF8E54E9),
+              ],
+            ),
+          ),
+          child: AppBar(
+            title: Text(
+              'Fare Management',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF2C3E50),
+              ),
+            ),
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            actions: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                margin: const EdgeInsets.all(8),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedFilter,
+                    icon: const Icon(Icons.filter_list, color: Colors.white),
+                    style: GoogleFonts.poppins(color: Colors.white),
+                    dropdownColor: Theme.of(context).primaryColor,
+                    items: ['All', 'Pending', 'Approved', 'Rejected']
+                        .map((String value) => DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(
+                                value,
+                                style: GoogleFonts.poppins(
+                                  color: _selectedFilter == value
+                                      ? Colors.white
+                                      : Colors.white70,
+                                ),
+                              ),
+                            ))
+                        .toList(),
+                    onChanged: (String? newValue) {
+                      if (newValue != null) {
+                        setState(() => _selectedFilter = newValue);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      body: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: _buildFaresList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSliverAppBar() {
+    return SliverAppBar(
+      floating: true,
+      pinned: true,
+      expandedHeight: 120,
+      flexibleSpace: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).primaryColor,
+              Theme.of(context).primaryColor.withOpacity(0.8),
+            ],
+          ),
+        ),
+        child: FlexibleSpaceBar(
+          title: Text(
+            'Fare Management',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          background: Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.1),
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          margin: const EdgeInsets.all(8),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedFilter,
+              icon: const Icon(Icons.filter_list, color: Colors.white),
+              style: GoogleFonts.poppins(color: Colors.white),
+              dropdownColor: Theme.of(context).primaryColor,
+              items: ['All', 'Pending', 'Approved', 'Rejected']
+                  .map((String value) => DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(
+                          value,
+                          style: GoogleFonts.poppins(
+                            color: _selectedFilter == value
+                                ? Colors.white
+                                : Colors.white70,
+                          ),
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (String? newValue) {
+                if (newValue != null) {
+                  setState(() => _selectedFilter = newValue);
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFaresList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: _buildQuery(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return SliverFillRemaining(
+            child: _buildErrorState(snapshot.error.toString()),
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SliverFillRemaining(
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return SliverFillRemaining(
+            child: _buildEmptyState(),
+          );
+        }
+
+        return SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildFareSubmissionCard(snapshot.data!.docs[index]),
+              );
+            },
+            childCount: snapshot.data!.docs.length,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.inbox_outlined,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No fare submissions available',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String error) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: Colors.red[300],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Error loading fares',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              color: Colors.red[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            error,
+            style: GoogleFonts.poppins(
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFareSubmissionCard(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     final DateTime submittedAt = DateTime.parse(data['submittedAt']);
@@ -161,67 +278,175 @@ class _FareManagementPageState extends State<FareManagementPage> {
         DateFormat('MMM d, y HH:mm').format(submittedAt);
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
       elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        childrenPadding: const EdgeInsets.all(20),
+        leading: _buildStatusIcon(data['status'] ?? 'Pending'),
         title: Text(
           '${data['source']} → ${data['destination']}',
-          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Fare: ₦${data['fareAmount']}', style: GoogleFonts.poppins()),
-            Text('Submitted: $formattedDate', style: GoogleFonts.poppins()),
+            const SizedBox(height: 8),
             Row(
               children: [
-                Text('Status: ', style: GoogleFonts.poppins()),
-                _buildStatusChip(data['status'] ?? 'Pending'),
+                Icon(
+                  Icons.payments_outlined,
+                  size: 16,
+                  color: Colors.grey[600],
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '₦${data['fareAmount']}',
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Icon(
+                  Icons.access_time,
+                  size: 16,
+                  color: Colors.grey[600],
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  formattedDate,
+                  style: GoogleFonts.poppins(
+                      color: Colors.grey[600], fontSize: 12),
+                ),
               ],
             ),
+            const SizedBox(height: 8),
+            _buildStatusChip(data['status'] ?? 'Pending'),
           ],
         ),
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
+          _buildDetailSection(data),
+          const SizedBox(height: 20),
+          _buildActionButtons(doc.id, data['status']),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusIcon(String status) {
+    IconData iconData;
+    Color iconColor;
+
+    switch (status) {
+      case 'Approved':
+        iconData = Icons.check_circle;
+        iconColor = Colors.green;
+        break;
+      case 'Rejected':
+        iconData = Icons.cancel;
+        iconColor = Colors.red;
+        break;
+      case 'Flagged':
+        iconData = Icons.flag;
+        iconColor = Colors.orange;
+        break;
+      default:
+        iconData = Icons.pending;
+        iconColor = Colors.blue;
+    }
+
+    return Icon(iconData, color: iconColor, size: 20);
+  }
+
+  Widget _buildDetailSection(Map<String, dynamic> data) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildDetailRow(
+          'Weather',
+          data['weatherConditions'],
+          Icons.cloud_outlined,
+        ),
+        _buildDetailRow(
+          'Traffic',
+          data['trafficConditions'],
+          Icons.traffic_outlined,
+        ),
+        _buildDetailRow(
+          'Passenger Load',
+          data['passengerLoad'],
+          Icons.group_outlined,
+        ),
+        _buildDetailRow(
+          'Rush Hour',
+          data['rushHourStatus'],
+          Icons.schedule_outlined,
+        ),
+        if (data['routeTaken']?.isNotEmpty ?? false)
+          _buildDetailRow(
+            'Route',
+            (data['routeTaken'] as List).join(' → '),
+            Icons.route_outlined,
+          ),
+        if (data['fareContext']?.isNotEmpty ?? false)
+          _buildDetailRow(
+            'Context',
+            data['fareContext'],
+            Icons.info_outline,
+          ),
+        if (data['rejectionReason']?.isNotEmpty ?? false)
+          _buildDetailRow(
+            'Rejection',
+            data['rejectionReason'],
+            Icons.cancel_outlined,
+            isRejection: true,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDetailRow(
+    String label,
+    String? value,
+    IconData icon, {
+    bool isRejection = false,
+  }) {
+    if (value == null || value.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            size: 20,
+            color: isRejection ? Colors.red : Colors.grey[600],
+          ),
+          const SizedBox(width: 8),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildDetailItem('Weather', data['weatherConditions']),
-                _buildDetailItem('Traffic', data['trafficConditions']),
-                _buildDetailItem('Passenger Load', data['passengerLoad']),
-                _buildDetailItem('Rush Hour Status', data['rushHourStatus']),
-                if (data['routeTaken']?.isNotEmpty ?? false)
-                  _buildDetailItem(
-                      'Route Taken', (data['routeTaken'] as List).join(' → ')),
-                if (data['fareContext']?.isNotEmpty ?? false)
-                  _buildDetailItem('Context', data['fareContext']),
-                if (data['rejectionReason']?.isNotEmpty ?? false)
-                  _buildDetailItem('Rejection Reason', data['rejectionReason'],
-                      isRejection: true),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildActionButton(
-                      'Approve',
-                      Colors.green,
-                      () => _updateFareStatus(doc.id, 'Approved'),
-                      data['status'] == 'Approved',
-                    ),
-                    _buildActionButton(
-                      'Reject',
-                      Colors.red,
-                      () => _showRejectionDialog(doc.id),
-                      data['status'] == 'Rejected',
-                    ),
-                    _buildActionButton(
-                      'Flag',
-                      Colors.orange,
-                      () => _updateFareStatus(doc.id, 'Flagged'),
-                      data['status'] == 'Flagged',
-                    ),
-                  ],
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: GoogleFonts.poppins(
+                    color: isRejection ? Colors.red : Colors.grey[800],
+                  ),
                 ),
               ],
             ),
@@ -231,59 +456,95 @@ class _FareManagementPageState extends State<FareManagementPage> {
     );
   }
 
-  Widget _buildDetailItem(String label, String? value,
-      {bool isRejection = false}) {
-    if (value == null || value.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('$label: ',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
-          Expanded(
-            child: Text(value,
-                style: GoogleFonts.poppins(
-                    color: isRejection ? Colors.red : null)),
-          ),
-        ],
-      ),
+  Widget _buildActionButtons(String fareId, String? status) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        _buildActionButton(
+          'Approve',
+          Icons.check,
+          Colors.green,
+          () => _updateFareStatus(fareId, 'Approved'),
+          status == 'Approved',
+        ),
+        const SizedBox(width: 12),
+        _buildActionButton(
+          'Reject',
+          Icons.close,
+          Colors.red,
+          () => _showRejectionDialog(fareId),
+          status == 'Rejected',
+        ),
+        const SizedBox(width: 12),
+        _buildActionButton(
+          'Flag',
+          Icons.flag,
+          Colors.orange,
+          () => _updateFareStatus(fareId, 'Flagged'),
+          status == 'Flagged',
+        ),
+      ],
     );
   }
 
   Widget _buildActionButton(
-      String label, Color color, VoidCallback onPressed, bool isActive) {
-    return ElevatedButton(
+    String label,
+    IconData icon,
+    Color color,
+    VoidCallback onPressed,
+    bool isActive,
+  ) {
+    return ElevatedButton.icon(
       onPressed: isActive ? null : onPressed,
+      icon: Icon(icon, size: 12),
+      label: Text(
+        label,
+        style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+      ),
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
-        disabledBackgroundColor: Colors.grey,
+        disabledBackgroundColor: Colors.grey[300],
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ),
-      child: Text(label, style: GoogleFonts.poppins(color: Colors.white)),
     );
   }
 
   Widget _buildStatusChip(String status) {
-    Color statusColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: _getStatusColor(status).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _getStatusColor(status),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        status,
+        style: GoogleFonts.poppins(
+          color: _getStatusColor(status),
+          fontWeight: FontWeight.w500,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Color _getStatusColor(String status) {
     switch (status) {
       case 'Approved':
-        statusColor = Colors.green;
-        break;
+        return Colors.green;
       case 'Rejected':
-        statusColor = Colors.red;
-        break;
+        return const Color.fromRGBO(244, 67, 54, 1);
       case 'Flagged':
-        statusColor = Colors.orange;
-        break;
+        return Colors.orange;
       default:
-        statusColor = Colors.blue;
+        return Colors.blue;
     }
-
-    return Chip(
-      label: Text(status, style: GoogleFonts.poppins(color: Colors.white)),
-      backgroundColor: statusColor,
-    );
   }
 
   Future<void> _showRejectionDialog(String fareId) async {
