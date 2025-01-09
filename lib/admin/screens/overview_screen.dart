@@ -30,6 +30,7 @@ class _OverviewPageState extends State<OverviewPage>
     final stats = await _statsService.getAdminStats();
     setState(() {
       _stats = stats;
+      print(_stats);
     });
   }
 

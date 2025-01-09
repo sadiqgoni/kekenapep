@@ -19,19 +19,22 @@ class AdminStatsService {
 
       for (var doc in submissions.docs) {
         String status = doc.data()['status'] ?? 'Pending';
-        switch (status.toLowerCase()) {
+        switch (status) {
           case 'Approved':
             ApprovedSubmissions++;
             break;
           case 'Pending':
             PendingSubmissions++;
             break;
-          case 'Rejected':
+          default:
             RejectedSubmissions++;
             break;
         }
       }
-
+      // print('Submissions: $totalSubmissions');
+      // print('Approved: $ApprovedSubmissions');
+      // print('Pending: $PendingSubmissions');
+      // print('Rejected: $RejectedSubmissions');
       return {
         'totalUsers': usersCount.count,
         'totalSubmissions': totalSubmissions,
