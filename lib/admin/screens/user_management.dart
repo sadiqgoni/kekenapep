@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:keke_fairshare/index.dart';
 
 class UserManagementPage extends StatefulWidget {
@@ -12,6 +13,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
   final UserManagementService _userService = UserManagementService();
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
+  final _refreshKey = GlobalKey<RefreshIndicatorState>();
 
   DocumentSnapshot? _lastDocument;
   List<DocumentSnapshot> _users = [];
@@ -25,6 +27,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
     super.initState();
     _loadUsers();
     _scrollController.addListener(_onScroll);
+  }
+
+  Future<void> _refreshData() async {
+    await _loadUsers(refresh: true);
   }
 
   @override
@@ -65,14 +71,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
       setState(() {
         _isLoading = false;
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading users: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading users: $e')),
+      );
     }
   }
 
@@ -84,9 +85,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
   }
 
   Future<void> _showUserDetails(String userId) async {
-    // print('Showing details for user ID: $userId');
     final userDetails = await _userService.getUserDetails(userId);
-    // print('Got user details: $userDetails');
 
     if (userDetails.isEmpty) {
       if (!mounted) return;
@@ -189,16 +188,22 @@ class _UserManagementPageState extends State<UserManagementPage> {
           ),
         ),
       ),
-      body: Column(
-        children: [
-          _buildSearchAndFilter(),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: () => _loadUsers(refresh: true),
+      body: RefreshIndicator(
+        key: _refreshKey,
+        onRefresh: _refreshData,
+        color: const Color(0xFF8E54E9),
+        backgroundColor: Colors.white,
+        strokeWidth: 3,
+        displacement: 40,
+        child: ListView(
+          children: [
+            _buildSearchAndFilter(),
+            SizedBox(
+              height: MediaQuery.of(context).size.height - 150,
               child: _buildUserList(),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -303,14 +308,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.person_search, size: 64, color: Colors.grey[400]),
+            Icon(
+              Icons.person_off,
+              size: 64,
+              color: Colors.grey[400],
+            ),
             const SizedBox(height: 16),
             Text(
               'No users found',
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 color: Colors.grey[600],
-                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -320,120 +328,125 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       itemCount: _users.length + (_hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index == _users.length) {
-          return _isLoading
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Theme.of(context).primaryColor,
-                      ),
-                    ),
-                  ),
-                )
-              : const SizedBox.shrink();
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(8),
+              child: CircularProgressIndicator(),
+            ),
+          );
         }
 
-        final user = _users[index].data() as Map<String, dynamic>;
-        final userId = _users[index].id;
+        final doc = _users[index];
+        final user = doc.data() as Map<String, dynamic>;
+        final userId = doc.id;
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+        return StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('statistics')
+              .doc('overview')
+              .snapshots(),
+          builder: (context, snapshot) {
+            final stats = snapshot.data?.data() as Map<String, dynamic>? ?? {};
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-            ],
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => _showUserDetails(userId),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    _buildUserAvatar(user),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => _showUserDetails(userId),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        _buildUserAvatar(user),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  user['fullName'] ?? 'Unknown',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF2C3E50),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      user['fullName'] ?? 'Unknown',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF2C3E50),
+                                      ),
+                                    ),
                                   ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF4776E6).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      '${stats['points'] ?? 0} pts',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF4776E6),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                user['phoneNumber'] ?? 'Not available',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.grey[600],
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color:
-                                      const Color(0xFF4776E6).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  '${user['points'] ?? 0} pts',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF4776E6),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  _buildStatBadge(
+                                    Icons.directions_car,
+                                    '${stats['totalSubmissions'] ?? 0}',
+                                    'Rides',
                                   ),
-                                ),
+                                  const SizedBox(width: 12),
+                                  _buildStatBadge(
+                                    Icons.check_circle,
+                                    '${stats['ApprovedSubmissions'] ?? 0}',
+                                    'Approved',
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user['phoneNumber'] ?? 'Not available',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              _buildStatBadge(
-                                Icons.directions_car,
-                                '${user['stats']?['totalSubmissions'] ?? 0}',
-                                'Rides',
-                              ),
-                              const SizedBox(width: 12),
-                              _buildStatBadge(
-                                Icons.check_circle,
-                                '${user['stats']?['ApprovedSubmissions'] ?? 0}',
-                                'Approved',
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -454,7 +467,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
       child: Center(
         child: Text(
           (user['fullName'] as String?)?.isNotEmpty == true
-              ? (user['fullName'] as String).substring(0, 1).toUpperCase()
+              ? (user['fullName'] as String)[0].toUpperCase()
               : '?',
           style: GoogleFonts.poppins(
             color: Colors.white,
@@ -483,28 +496,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildDeleteButton() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: ElevatedButton(
-        onPressed: () {},
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.red,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-        child: Text(
-          'Delete User',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
     );
   }
 }
@@ -553,6 +544,9 @@ class _UserDetailsSheet extends StatelessWidget {
             ),
           ),
           _buildBottomActions(),
+          const SizedBox(
+            height: 8,
+          )
         ],
       ),
     );
@@ -785,28 +779,18 @@ class _UserDetailsSheet extends StatelessWidget {
   }
 
   Widget _buildBottomActions() {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            offset: const Offset(0, -4),
-            blurRadius: 10,
-          ),
-        ],
-      ),
-      child: ElevatedButton(
-        onPressed: onDelete,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFFF4B4B),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+    return ElevatedButton(
+      onPressed: onDelete,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFFF4B4B),
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
         ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(8.0),
         child: Text(
           'Delete User',
           style: GoogleFonts.poppins(

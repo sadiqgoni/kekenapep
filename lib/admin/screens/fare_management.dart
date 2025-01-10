@@ -547,6 +547,75 @@ class _FareManagementPageState extends State<FareManagementPage> {
     }
   }
 
+  Future<void> _updateFareStatus(String fareId, String status,
+      [String? reason]) async {
+    try {
+      final fareRef =
+          FirebaseFirestore.instance.collection('fares').doc(fareId);
+      final fare = await fareRef.get();
+      final userId = fare.data()?['submitter']?['uid'] as String?;
+
+      if (userId == null) {
+        throw 'User ID not found for this fare';
+      }
+
+      // Update both status fields and metadata
+      await fareRef.update({
+        'status': status,
+        'metadata.status': status,
+        'metadata.reviewedAt': DateTime.now().toIso8601String(),
+        'metadata.reviewedBy': 'admin',
+        'reviewedAt': DateTime.now().toIso8601String(),
+        'reviewedBy': 'admin',
+        if (reason != null) 'rejectionReason': reason,
+      });
+
+      // Update user statistics
+      final userStatsRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('statistics')
+          .doc('overview');
+
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        final statsDoc = await transaction.get(userStatsRef);
+        final currentStats = statsDoc.data() ?? {};
+
+        // Calculate points (only for approved submissions)
+        int pointsToAdd = status == 'Approved' ? 3 : 0;
+
+        // Update submission counts
+        final newStats = {
+          'totalSubmissions': (currentStats['totalSubmissions'] ?? 0),
+          'ApprovedSubmissions': (currentStats['ApprovedSubmissions'] ?? 0) +
+              (status == 'Approved' ? 1 : 0),
+          'PendingSubmissions': (currentStats['PendingSubmissions'] ?? 0) - 1,
+          'RejectedSubmissions': (currentStats['RejectedSubmissions'] ?? 0) +
+              (status == 'Rejected' ? 1 : 0),
+          'points': (currentStats['points'] ?? 0) + pointsToAdd,
+          'lastSubmissionAt': DateTime.now().toIso8601String(),
+          'updatedAt': DateTime.now().toIso8601String(),
+        };
+
+        transaction.set(userStatsRef, newStats, SetOptions(merge: true));
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Fare ${status.toLowerCase()} successfully'),
+          backgroundColor: status == 'Approved' ? Colors.green : Colors.red,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating fare status: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _showRejectionDialog(String fareId) async {
     _rejectionReasonController.clear();
     return showDialog(
@@ -570,8 +639,9 @@ class _FareManagementPageState extends State<FareManagementPage> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _updateFareStatus(fareId, 'Rejected',
-                  reason: _rejectionReasonController.text);
+              _updateFareStatus(
+                  fareId, 'Rejected', _rejectionReasonController.text);
+              // reason: _rejectionReasonController.text);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child:
@@ -580,54 +650,5 @@ class _FareManagementPageState extends State<FareManagementPage> {
         ],
       ),
     );
-  }
-
-  Future<void> _updateFareStatus(String fareId, String status,
-      {String? reason}) async {
-    try {
-      // Update main fare document
-      final fareRef = _firestore.collection('fares').doc(fareId);
-      final fareDoc = await fareRef.get();
-      final data = fareDoc.data() as Map<String, dynamic>;
-
-      await fareRef.update({
-        'status': status,
-        'reviewedAt': DateTime.now().toIso8601String(),
-        'reviewedBy': 'admin', // You might want to use actual admin ID
-        if (reason != null) 'rejectionReason': reason,
-      });
-
-      // Update user's submission copy
-      if (data['userId'] != null) {
-        await _firestore
-            .collection('users')
-            .doc(data['userId'])
-            .collection('submissions')
-            .doc(fareId)
-            .update({
-          'status': status,
-          'reviewedAt': DateTime.now().toIso8601String(),
-          'reviewedBy': 'admin',
-          if (reason != null) 'rejectionReason': reason,
-        });
-      }
-
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('Fare $status successfully', style: GoogleFonts.poppins()),
-          backgroundColor: status == 'Approved' ? Colors.green : Colors.red,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('Error updating fare: $e', style: GoogleFonts.poppins()),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {}
   }
 }

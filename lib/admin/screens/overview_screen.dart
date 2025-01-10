@@ -30,7 +30,6 @@ class _OverviewPageState extends State<OverviewPage>
     final stats = await _statsService.getAdminStats();
     setState(() {
       _stats = stats;
-      print(_stats);
     });
   }
 
@@ -44,7 +43,7 @@ class _OverviewPageState extends State<OverviewPage>
       body: RefreshIndicator(
         key: _refreshKey,
         onRefresh: _refreshData,
-        color: Colors.yellow[700],
+        color: const Color(0xFF8E54E9),
         backgroundColor: Colors.white,
         strokeWidth: 3,
         displacement: 40,
@@ -64,7 +63,7 @@ class _OverviewPageState extends State<OverviewPage>
       floating: true,
       pinned: true,
       expandedHeight: 100.0,
-      backgroundColor: const Color(0xFFFFFFFF), // Clean white background
+      backgroundColor: const Color(0xFFFFFFFF),
       flexibleSpace: FlexibleSpaceBar(
         titlePadding: const EdgeInsets.only(left: 26, bottom: 20),
         title: Text(
@@ -72,7 +71,7 @@ class _OverviewPageState extends State<OverviewPage>
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.bold,
             fontSize: 20,
-            color: const Color(0xFF2C3E50), // Dark blue-gray for text
+            color: const Color(0xFF2C3E50),
           ),
         ),
         background: Container(
@@ -81,8 +80,8 @@ class _OverviewPageState extends State<OverviewPage>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFF4776E6), // Rich blue
-                Color(0xFF8E54E9), // Purple
+                Color(0xFF4776E6),
+                Color(0xFF8E54E9),
               ],
             ),
           ),
@@ -96,7 +95,7 @@ class _OverviewPageState extends State<OverviewPage>
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FF), // Light blue-tinted background
+        color: const Color(0xFFF8F9FF),
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(30),
           bottomRight: Radius.circular(30),
