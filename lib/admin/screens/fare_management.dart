@@ -555,18 +555,34 @@ class _FareManagementPageState extends State<FareManagementPage> {
       final fare = await fareRef.get();
       final userId = fare.data()?['submitter']?['uid'] as String?;
 
+      // Get current admin's data
+      final adminId = FirebaseAuth.instance.currentUser?.uid;
+      final adminDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(adminId)
+          .get();
+      final adminName = adminDoc.data()?['fullName'] ?? 'Unknown Admin';
+
       if (userId == null) {
         throw 'User ID not found for this fare';
       }
 
-      // Update both status fields and metadata
+      // Update both status fields and metadata with admin info
       await fareRef.update({
         'status': status,
         'metadata.status': status,
         'metadata.reviewedAt': DateTime.now().toIso8601String(),
-        'metadata.reviewedBy': 'admin',
+        'metadata.reviewedBy': {
+          'id': adminId,
+          'name': adminName,
+          'timestamp': DateTime.now().toIso8601String(),
+        },
         'reviewedAt': DateTime.now().toIso8601String(),
-        'reviewedBy': 'admin',
+        'reviewedBy': {
+          'id': adminId,
+          'name': adminName,
+          'timestamp': DateTime.now().toIso8601String(),
+        },
         if (reason != null) 'rejectionReason': reason,
       });
 

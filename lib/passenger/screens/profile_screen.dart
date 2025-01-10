@@ -307,7 +307,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .map((word) => word.isNotEmpty ? word[0].toUpperCase() : '')
         .join('');
 
-    // Take up to 3 initials (or fewer if less words are present)
     String avatarText =
         initials.length > 3 ? initials.substring(0, 3) : initials;
 
@@ -319,7 +318,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               width: 100,
               height: 100,
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: Color.fromARGB(190, 255, 255, 255),
                 shape: BoxShape.circle,
               ),
               child: Center(

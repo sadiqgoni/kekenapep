@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
 import 'package:keke_fairshare/index.dart';
 
 class UserManagementPage extends StatefulWidget {
@@ -195,12 +194,18 @@ class _UserManagementPageState extends State<UserManagementPage> {
         backgroundColor: Colors.white,
         strokeWidth: 3,
         displacement: 40,
-        child: ListView(
+        child: Column(
           children: [
             _buildSearchAndFilter(),
-            SizedBox(
-              height: MediaQuery.of(context).size.height - 150,
-              child: _buildUserList(),
+            Expanded(
+              child: ListView(
+                children: [
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height - 150,
+                    child: _buildUserList(),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -399,7 +404,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
                                       vertical: 6,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF4776E6).withOpacity(0.1),
+                                      color: const Color(0xFF4776E6)
+                                          .withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(20),
                                     ),
                                     child: Text(
@@ -784,7 +790,7 @@ class _UserDetailsSheet extends StatelessWidget {
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFFFF4B4B),
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
         ),

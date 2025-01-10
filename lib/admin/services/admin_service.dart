@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class AdminService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -258,4 +259,30 @@ class AdminService {
   // }
 
   // Refresh admin token periodically
+  Future<bool> isAdmin() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return false;
+
+    try {
+      final userDoc =
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final isAdmin = userDoc.data()?['role'] == 'admin';
+      
+      // Store admin status in shared preferences
+      if (isAdmin) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isAdmin', true);
+        await prefs.setString('lastLoginRole', 'admin');
+      }
+      
+      return isAdmin;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<String?> getLastLoginRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('lastLoginRole');
+  }
 }

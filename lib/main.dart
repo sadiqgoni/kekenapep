@@ -1,5 +1,8 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:keke_fairshare/index.dart';
-import 'package:keke_fairshare/passenger/screens/onboarding_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,12 +15,18 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  /// Fetch the last logged-in role from SharedPreferences.
+  Future<String?> getLastLoginRole() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('last_login_role'); // Expect 'admin' or 'passenger'
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'KeKe FairShare',
-      theme: AppTheme.theme,
-      initialRoute: '/',
+      theme: ThemeData.light(), // Replace with AppTheme.theme if applicable
+      debugShowCheckedModeBanner: false,
       routes: {
         '/': (context) => const AuthGate(),
         '/admin': (context) => const AdminLoginScreen(),
@@ -28,7 +37,36 @@ class MyApp extends StatelessWidget {
           builder: (context) => const AuthGate(),
         );
       },
-      debugShowCheckedModeBanner: false,
+      initialRoute: '/', // Default route
+      onGenerateInitialRoutes: (String initialRouteName) {
+        return [
+          MaterialPageRoute(
+            builder: (context) {
+              return FutureBuilder<String?>(
+                future: getLastLoginRole(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (snapshot.hasError) {
+                    return const AuthGate();
+                  }
+
+                  final lastRole = snapshot.data;
+                  final currentUser = FirebaseAuth.instance.currentUser;
+
+                  if (lastRole == 'admin' && currentUser != null) {
+                    return const AdminDashboardScreen();
+                  }
+
+                  return const AuthGate();
+                },
+              );
+            },
+          ),
+        ];
+      },
     );
   }
 }

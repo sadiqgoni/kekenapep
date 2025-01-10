@@ -20,7 +20,6 @@ class _HomeScreenState extends State<HomeScreen> {
         await _statsService.refreshUserStats(userId);
       }
     } catch (e) {
-      // Handle any errors during refresh
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error refreshing data: ${e.toString()}'),
