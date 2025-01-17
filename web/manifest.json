@@ -1,11 +1,11 @@
 {
-    "name": "keke_fairshare",
-    "short_name": "keke_fairshare",
+    "name": "KeKe FairShare",
+    "short_name": "KeKe FairShare",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#hexcode",
+    "theme_color": "#hexcode",
+    "description": "KeKe FairShare - A ride-sharing app",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
