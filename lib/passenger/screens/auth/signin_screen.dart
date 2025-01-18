@@ -1,4 +1,5 @@
 import 'package:keke_fairshare/index.dart';
+import 'package:keke_fairshare/passenger/screens/auth/forgot_password_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -23,7 +24,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   void _showTopSnackBar(String message, {bool isError = false}) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -197,7 +198,29 @@ class _SignInScreenState extends State<SignInScreen> {
                         },
                       ),
                     ),
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 20),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const ForgotPasswordScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'Forgot Password?',
+                          style: TextStyle(
+                            color: Color(0xFFFDB300),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+
                     ElevatedButton(
                       onPressed: _isLoading ? null : _handleSignIn,
                       style: ElevatedButton.styleFrom(
@@ -229,7 +252,9 @@ class _SignInScreenState extends State<SignInScreen> {
                               ),
                             ),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 20),
+                    // const SizedBox(height: 30),
+
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
