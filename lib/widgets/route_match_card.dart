@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:keke_fairshare/passenger/services/user_points_service.dart';
 
 class RouteMatchCard extends StatefulWidget {
   final Map<String, dynamic> route;
@@ -24,11 +25,33 @@ class _RouteMatchCardState extends State<RouteMatchCard> {
   bool _isLiked = false;
   bool _isLoading = false;
   int _helpfulCount = 0;
+  int _submitterPoints = 0;
+  bool _isLoadingPoints = true;
 
   @override
   void initState() {
     super.initState();
     _loadHelpfulStatus();
+    _loadSubmitterPoints();
+  }
+
+  Future<void> _loadSubmitterPoints() async {
+    setState(() => _isLoadingPoints = true);
+
+    try {
+      final submitterId = widget.route['submitterUid'] as String?;
+      if (submitterId == null || submitterId.isEmpty) return;
+
+      final pointsMap =
+          await UserPointsService.getBatchUserPoints([submitterId]);
+      setState(() {
+        _submitterPoints = pointsMap[submitterId] ?? 0;
+        _isLoadingPoints = false;
+      });
+    } catch (e) {
+      print('Error loading submitter points: $e');
+      setState(() => _isLoadingPoints = false);
+    }
   }
 
   Future<void> _loadHelpfulStatus() async {
@@ -156,20 +179,17 @@ class _RouteMatchCardState extends State<RouteMatchCard> {
                 Row(
                   children: [
                     if (widget.route['submitterUid'] != null)
-                      FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(widget.route['submitterUid'])
-                            .collection('statistics')
-                            .doc('overview')
-                            .get(),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasData &&
-                              snapshot.data?.data() != null) {
-                            final points = (snapshot.data!.data()
-                                    as Map<String, dynamic>)['points'] ??
-                                0;
-                            return Container(
+                      _isLoadingPoints
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.blue[700]!),
+                              ),
+                            )
+                          : Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 4),
                               margin: const EdgeInsets.only(right: 8),
@@ -183,7 +203,7 @@ class _RouteMatchCardState extends State<RouteMatchCard> {
                                       size: 12, color: Colors.blue[900]),
                                   const SizedBox(width: 4),
                                   Text(
-                                    '$points pts',
+                                    '$_submitterPoints pts',
                                     style: GoogleFonts.poppins(
                                       fontSize: 12,
                                       color: Colors.blue[900],
@@ -191,11 +211,7 @@ class _RouteMatchCardState extends State<RouteMatchCard> {
                                   ),
                                 ],
                               ),
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      ),
+                            ),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),

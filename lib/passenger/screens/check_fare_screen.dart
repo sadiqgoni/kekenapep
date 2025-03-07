@@ -2,6 +2,8 @@ import 'dart:math';
 import 'package:keke_fairshare/index.dart';
 import 'package:keke_fairshare/widgets/location_autocomplete_field.dart';
 import 'package:keke_fairshare/widgets/landmarks_selector.dart';
+import 'package:keke_fairshare/passenger/services/route_query_service.dart';
+import 'package:keke_fairshare/passenger/services/user_points_service.dart';
 
 class CheckFareScreen extends StatefulWidget {
   const CheckFareScreen({super.key});
@@ -14,14 +16,67 @@ class CheckFareScreen extends StatefulWidget {
 class _CheckFareScreenState extends State<CheckFareScreen> {
   final _formKey = GlobalKey<FormState>();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final ScrollController _scrollController = ScrollController();
 
   String? _source;
   String? _destination;
   final List<String> _landmarks = [];
   final TextEditingController _landmarkController = TextEditingController();
   bool _isLoading = false;
+  bool _isLoadingMore = false;
   FareFilter? _currentFilter;
   List<Map<String, dynamic>> _matchingRoutes = [];
+  int _currentPage = 0;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+            _scrollController.position.maxScrollExtent * 0.8 &&
+        !_isLoadingMore &&
+        _hasMore) {
+      _loadMoreRoutes();
+    }
+  }
+
+  Future<void> _loadMoreRoutes() async {
+    if (_isLoadingMore || !_hasMore) return;
+
+    setState(() => _isLoadingMore = true);
+
+    try {
+      final result = await RouteQueryService.searchRoutes(
+        source: _source!,
+        destination: _destination!,
+        landmarks: _landmarks,
+        page: _currentPage + 1,
+        filters: _currentFilter?.toMap(),
+      );
+
+      setState(() {
+        _matchingRoutes.addAll(result.routes);
+        _currentPage = result.currentPage;
+        _hasMore = result.hasMore;
+        _isLoadingMore = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingMore = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading more routes: $e')),
+      );
+    }
+  }
 
   void _addLandmark() {
     if (_landmarkController.text.isNotEmpty) {
@@ -49,212 +104,58 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _currentPage = 0;
+      _hasMore = true;
+      _matchingRoutes.clear();
+    });
+
     try {
       _formKey.currentState!.save();
 
-      // Step 1: Get Approved routes within the last 30 days
-      final thirtyDaysAgo = DateTime.now().subtract(const Duration(days: 30));
+      final result = await RouteQueryService.searchRoutes(
+        source: _source!,
+        destination: _destination!,
+        landmarks: _landmarks,
+        filters: _currentFilter?.toMap(),
+        refresh: true,
+      );
 
-      final sourceDestQuery = await _firestore
-          .collection('fares')
-          .where('status', isEqualTo: 'Approved')
-          .where('submittedAt', isGreaterThan: thirtyDaysAgo.toIso8601String())
-          .get();
-
-      // Step 2: Score and filter matches
-      List<Map<String, dynamic>> potentialMatches = [];
-
-      for (var doc in sourceDestQuery.docs) {
-        final data = doc.data();
-
-        // Initialize match score
-        double matchScore = 0;
-        double maxPossibleScore = 0;
-
-        // Source/destination scoring (max 20 points)
-        maxPossibleScore += 20;
-        if (_isExactMatch(data['source'], _source!)) {
-          matchScore += 10; // Increased from 5
-        } else if (_isFuzzyMatch(data['source'], _source!)) {
-          matchScore += 5; // Increased from 3
-        }
-
-        if (_isExactMatch(data['destination'], _destination!)) {
-          matchScore += 10; // Increased from 5
-        } else if (_isFuzzyMatch(data['destination'], _destination!)) {
-          matchScore += 5; // Increased from 3
-        }
-
-        // Landmark scoring (max 30 points - 10 per landmark)
-        List<String> routeLandmarks =
-            List<String>.from(data['routeTaken'] ?? []);
-        int landmarkMatches = 0;
-        double landmarkScore = 0;
-
-        for (String landmark in _landmarks) {
-          maxPossibleScore += 10;
-          double bestMatchForLandmark = 0;
-
-          for (String routeLandmark in routeLandmarks) {
-            if (_isExactMatch(landmark, routeLandmark)) {
-              bestMatchForLandmark = 10; // Increased from 3
-              landmarkMatches++;
-              break;
-            } else {
-              double similarity = _calculateLevenshteinSimilarity(
-                  landmark.toLowerCase(), routeLandmark.toLowerCase());
-              bestMatchForLandmark = max(bestMatchForLandmark,
-                  similarity * 8); // Up to 8 points for close matches
-            }
-          }
-          landmarkScore += bestMatchForLandmark;
-        }
-        matchScore += landmarkScore;
-
-        // Time-based relevance (reduce score by up to 20% based on age)
-        final submissionDate = DateTime.parse(data['submittedAt']);
-        final daysAgo = DateTime.now().difference(submissionDate).inDays;
-        double timeMultiplier = 1.0 - (daysAgo / 30) * 0.2;
-        matchScore *= timeMultiplier;
-
-        // Calculate percentage match
-        double matchPercentage = (matchScore / maxPossibleScore) * 100;
-
-        // Only include if match percentage is >= 80% and has at least one landmark match
-        if (matchPercentage >= 80 && landmarkMatches >= 1) {
-          potentialMatches.add({
-            ...data,
-            'id': doc.id,
-            'matchScore': matchPercentage,
-            'submitterUid': data['submitter']?['uid'] ?? '',
-          });
-        }
-      }
-
-      // await AppLogger.logInfo(
-      //   'CheckFare',
-      //   'Match scoring complete',
-      //   additionalInfo: {
-      //     'potentialMatchesCount': potentialMatches.length,
-      //   },
-      // );
-
-      // Step 3: Process matches and calculate fare
-      if (potentialMatches.isEmpty) {
+      if (result.routes.isEmpty) {
         throw 'No similar routes found with sufficient match (≥80%). Try adjusting your route details.';
       }
 
-      // Get user points for each submitter
-      final submitterIds = potentialMatches
-          .map((m) => m['submitterUid'] as String)
-          .toSet()
-          .toList();
-      final userStatsSnapshots = await Future.wait(submitterIds.map((uid) =>
-          _firestore
-              .collection('users')
-              .doc(uid)
-              .collection('statistics')
-              .doc('overview')
-              .get()));
-
-      // Create map of user points
-      final userPoints = Map.fromIterables(
-          submitterIds,
-          userStatsSnapshots.map(
-              (snap) => (snap.data()?['points'] as num?)?.toDouble() ?? 0.0));
-
-      // Sort by match score and user points (weighted combination)
-      potentialMatches.sort((a, b) {
-        final scoreA = a['matchScore'] as double;
-        final scoreB = b['matchScore'] as double;
-        final pointsA = userPoints[a['submitterUid']] ?? 0.0;
-        final pointsB = userPoints[b['submitterUid']] ?? 0.0;
-
-        // Normalize points to 0-100 range for fair comparison with match score
-        final maxPoints = userPoints.values.reduce(max);
-        final normalizedPointsA = (pointsA / maxPoints) * 100;
-        final normalizedPointsB = (pointsB / maxPoints) * 100;
-
-        // Weight: 70% match score, 30% user points
-        final weightedScoreA = (scoreA * 0.7) + (normalizedPointsA * 0.3);
-        final weightedScoreB = (scoreB * 0.7) + (normalizedPointsB * 0.3);
-
-        return weightedScoreB.compareTo(weightedScoreA);
+      setState(() {
+        _matchingRoutes = result.routes;
+        _currentPage = result.currentPage;
+        _hasMore = result.hasMore;
       });
 
-      // Calculate weighted average fare
+      // Calculate fare statistics
+      final fares = _matchingRoutes
+          .take(5)
+          .map((r) => double.parse(r['fareAmount'].toString()))
+          .toList();
+      final minFare = fares.reduce((a, b) => a < b ? a : b);
+      final maxFare = fares.reduce((a, b) => a > b ? a : b);
+
+      double weightedSum = 0;
       double totalWeight = 0;
-      double weightedFareSum = 0;
-      List<double> fares = [];
 
-      for (var match in potentialMatches.take(5)) {
-        double weight = match['matchScore'] / 10.0;
-        double fare = double.parse(match['fareAmount'].toString());
-
-        weightedFareSum += fare * weight;
+      for (var route in _matchingRoutes.take(5)) {
+        final weight = route['matchScore'] / 10.0;
+        final fare = double.parse(route['fareAmount'].toString());
+        weightedSum += fare * weight;
         totalWeight += weight;
-        fares.add(fare);
       }
 
-      double estimatedFare = weightedFareSum / totalWeight;
-      double minFare = fares.reduce(min);
-      double maxFare = fares.reduce(max);
-
-      // Calculate confidence
-      String confidence = _calculateConfidence(
-        potentialMatches.take(5).toList(),
+      final estimatedFare = weightedSum / totalWeight;
+      final confidence = _calculateConfidence(
+        _matchingRoutes.take(5).toList(),
         minFare,
         maxFare,
       );
-
-      // await AppLogger.logInfo(
-      //   'CheckFare',
-      //   'Fare calculation complete',
-      //   additionalInfo: {
-      //     'estimatedFare': estimatedFare,
-      //     'minFare': minFare,
-      //     'maxFare': maxFare,
-      //     'confidence': confidence,
-      //   },
-      // );
-
-      setState(() {
-        _matchingRoutes = potentialMatches;
-      });
-
-      if (_currentFilter != null) {
-        _matchingRoutes = _matchingRoutes.where((route) {
-          final routeDate = DateTime.parse(route['dateTime']);
-
-          if (_currentFilter!.fromDate != null &&
-              routeDate.isBefore(_currentFilter!.fromDate!)) {
-            return false;
-          }
-
-          if (_currentFilter!.weatherCondition != null &&
-              route['weatherConditions'] != _currentFilter!.weatherCondition) {
-            return false;
-          }
-
-          if (_currentFilter!.trafficCondition != null &&
-              route['trafficConditions'] != _currentFilter!.trafficCondition) {
-            return false;
-          }
-
-          if (_currentFilter!.passengerLoad != null &&
-              route['passengerLoad'] != _currentFilter!.passengerLoad) {
-            return false;
-          }
-
-          if (_currentFilter!.rushHourStatus != null &&
-              route['rushHourStatus'] != _currentFilter!.rushHourStatus) {
-            return false;
-          }
-
-          return true;
-        }).toList();
-      }
 
       _showFareResult(
         [minFare.round(), maxFare.round()],
@@ -262,11 +163,6 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
         confidence,
       );
     } catch (e) {
-      // await AppLogger.logError(
-      //   'CheckFare',
-      //   'Error generating fare',
-      //   additionalInfo: {'error': e.toString()},
-      // );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString())),
       );
@@ -388,7 +284,6 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
                           color: Colors.grey[600],
                         ),
                       ),
-                      // const SizedBox(height: 8),
                       _buildWarningIndicator(confidence),
                     ],
                   ),
@@ -416,8 +311,25 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
               Expanded(
                 child: ListView.builder(
                   controller: controller,
-                  itemCount: _matchingRoutes.length,
+                  itemCount: _matchingRoutes.length + (_isLoadingMore ? 1 : 0),
                   itemBuilder: (context, index) {
+                    if (index == _matchingRoutes.length) {
+                      return Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.yellow[700]!,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
                     final route = _matchingRoutes[index];
                     return RouteMatchCard(
                       route: route,
@@ -454,6 +366,9 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
     if (result != null) {
       setState(() {
         _currentFilter = result;
+        _currentPage = 0;
+        _hasMore = true;
+        _matchingRoutes.clear();
       });
       _generateFare();
     }
@@ -548,6 +463,7 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
+              controller: _scrollController,
               child: Form(
                 key: _formKey,
                 child: Column(
