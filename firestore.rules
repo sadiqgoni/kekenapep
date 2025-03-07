@@ -59,6 +59,18 @@ service cloud.firestore {
         isAdmin()
       );
       allow delete: if isAuthenticated() && isAdmin();
+
+      // Rules for helpful subcollection
+      match /helpful/{userId} {
+        allow read: if isAuthenticated();
+        allow create, update: if isAuthenticated() && request.auth.uid == userId;
+        allow delete: if isAuthenticated() && (
+          // Users can delete their own helpful marks
+          request.auth.uid == userId ||
+          // Admins can delete any helpful marks
+          isAdmin()
+        );
+      }
     }
     
     // Routes collection

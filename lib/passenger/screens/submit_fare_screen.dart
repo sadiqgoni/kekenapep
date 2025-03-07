@@ -1,6 +1,8 @@
 // ignore_for_file: unused_field, use_build_context_synchronously
 import 'package:keke_fairshare/index.dart';
 import 'package:intl/intl.dart';
+import 'package:keke_fairshare/widgets/location_autocomplete_field.dart';
+import 'package:keke_fairshare/widgets/landmarks_selector.dart';
 
 class SubmitFareScreen extends StatefulWidget {
   const SubmitFareScreen({super.key});
@@ -438,20 +440,21 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   _buildSectionTitle('Trip Details'),
-                  _buildTextField(
+                  LocationAutocompleteField(
                     label: 'Source',
-                    onSaved: (value) => _source = value,
-                    validator: (value) =>
-                        value!.isEmpty ? 'Please enter source' : null,
                     icon: Icons.location_on,
+                    onSelected: (value) => _source = value,
+                    validator: (value) =>
+                        value?.isEmpty ?? true ? 'Please enter source' : null,
                   ),
                   const SizedBox(height: 16),
-                  _buildTextField(
+                  LocationAutocompleteField(
                     label: 'Destination',
-                    onSaved: (value) => _destination = value,
-                    validator: (value) =>
-                        value!.isEmpty ? 'Please enter destination' : null,
                     icon: Icons.location_searching,
+                    onSelected: (value) => _destination = value,
+                    validator: (value) => value?.isEmpty ?? true
+                        ? 'Please enter destination'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   _buildTextField(
@@ -513,9 +516,17 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
                   ),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Route Details'),
-                  _buildLandmarkInput(),
-                  const SizedBox(height: 16),
-                  _buildLandmarkChips(),
+                  LandmarksSelector(
+                    source: _source ?? '',
+                    destination: _destination ?? '',
+                    selectedLandmarks: _routeTaken,
+                    onLandmarksChanged: (landmarks) {
+                      setState(() {
+                        _routeTaken.clear();
+                        _routeTaken.addAll(landmarks);
+                      });
+                    },
+                  ),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Trip Conditions'),
                   _buildDropdown(

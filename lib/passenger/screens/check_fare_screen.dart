@@ -1,5 +1,7 @@
 import 'dart:math';
 import 'package:keke_fairshare/index.dart';
+import 'package:keke_fairshare/widgets/location_autocomplete_field.dart';
+import 'package:keke_fairshare/widgets/landmarks_selector.dart';
 
 class CheckFareScreen extends StatefulWidget {
   const CheckFareScreen({super.key});
@@ -123,6 +125,7 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
         if (matchPercentage >= 80 && landmarkMatches >= 1) {
           potentialMatches.add({
             ...data,
+            'id': doc.id,
             'matchScore': matchPercentage,
             'submitterUid': data['submitter']?['uid'] ?? '',
           });
@@ -551,26 +554,33 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSectionTitle('Route Information'),
-                    _buildTextField(
+                    LocationAutocompleteField(
                       label: 'Source',
-                      onSaved: (value) => _source = value,
-                      validator: (value) =>
-                          value!.isEmpty ? 'Please enter source' : null,
                       icon: Icons.location_on,
+                      onSelected: (value) => _source = value,
+                      validator: (value) =>
+                          value?.isEmpty ?? true ? 'Please enter source' : null,
                     ),
                     const SizedBox(height: 16),
-                    _buildTextField(
+                    LocationAutocompleteField(
                       label: 'Destination',
-                      onSaved: (value) => _destination = value,
-                      validator: (value) =>
-                          value!.isEmpty ? 'Please enter destination' : null,
                       icon: Icons.location_searching,
+                      onSelected: (value) => _destination = value,
+                      validator: (value) => value?.isEmpty ?? true
+                          ? 'Please enter destination'
+                          : null,
                     ),
                     const SizedBox(height: 24),
-                    _buildSectionTitle('Landmarks (at least 3)'),
-                    _buildLandmarkInput(),
-                    const SizedBox(height: 16),
-                    _buildLandmarkChips(),
+                    _buildSectionTitle('Landmarks (at least 2)'),
+                    LandmarksSelector(
+                      source: _source ?? '',
+                      destination: _destination ?? '',
+                      selectedLandmarks: _landmarks,
+                      onLandmarksChanged: (landmarks) {
+                        setState(() => _landmarks.clear());
+                        setState(() => _landmarks.addAll(landmarks));
+                      },
+                    ),
                     const SizedBox(height: 32),
                     Center(
                       child: ElevatedButton(
@@ -631,71 +641,6 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
           fontSize: 18,
           fontWeight: FontWeight.bold,
           color: Colors.black87,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required String label,
-    TextInputType? keyboardType,
-    required FormFieldSetter<String> onSaved,
-    required FormFieldValidator<String> validator,
-    required IconData icon,
-  }) {
-    return TextFormField(
-      keyboardType: keyboardType,
-      onSaved: onSaved,
-      validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: Colors.yellow[700]),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.yellow[700]!, width: 2),
-        ),
-      ),
-      style: GoogleFonts.poppins(),
-    );
-  }
-
-  Widget _buildLandmarkInput() {
-    return TextFormField(
-      controller: _landmarkController,
-      decoration: InputDecoration(
-        labelText: 'Enter Landmark',
-        hintText: 'e.g. Kofar Nassarawa, Zoo Road',
-        suffixIcon: IconButton(
-          icon: Icon(Icons.add, color: Colors.yellow[700]),
-          onPressed: _addLandmark,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.yellow[700]!, width: 2),
-        ),
-      ),
-      style: GoogleFonts.poppins(),
-    );
-  }
-
-  Widget _buildLandmarkChips() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      children: List<Widget>.generate(
-        _landmarks.length,
-        (index) => Chip(
-          label: Text(_landmarks[index], style: GoogleFonts.poppins()),
-          deleteIcon: const Icon(Icons.close, size: 18),
-          onDeleted: () => _removeLandmark(index),
-          backgroundColor: Colors.yellow[100],
-          deleteIconColor: Colors.red[700],
         ),
       ),
     );

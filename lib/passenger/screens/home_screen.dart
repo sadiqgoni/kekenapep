@@ -11,23 +11,19 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final UserStatsService _statsService = UserStatsService();
+  final UserStatsService _userStatsService = UserStatsService();
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
 
-  Future<void> _refreshData() async {
-    try {
-      // Refresh user stats
-      final userId = _auth.currentUser?.uid;
-      if (userId != null) {
-        await _statsService.refreshUserStats(userId);
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error refreshing data: ${e.toString()}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+  @override
+  void initState() {
+    super.initState();
+    _refreshStats();
+  }
+
+  Future<void> _refreshStats() async {
+    final userId = _auth.currentUser?.uid;
+    if (userId != null) {
+      await _userStatsService.refreshUserStats(userId);
     }
   }
 
@@ -39,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: RefreshIndicator(
         key: _refreshKey,
-        onRefresh: _refreshData,
+        onRefresh: _refreshStats,
         color: Colors.yellow[700],
         backgroundColor: Colors.white,
         strokeWidth: 3,
@@ -62,7 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSliverAppBar() {
     print('HomeScreen: Building app bar with notification bell');
     final notificationService = NotificationService();
-    
+
     return SliverAppBar(
       floating: true,
       pinned: true,
@@ -93,19 +89,23 @@ class _HomeScreenState extends State<HomeScreen> {
         Stack(
           children: [
             IconButton(
-              icon: const Icon(Icons.notifications_outlined, color: Colors.black87),
+              icon: const Icon(Icons.notifications_outlined,
+                  color: Colors.black87),
               onPressed: () {
-                print('HomeScreen: Notification bell pressed, navigating to notifications screen');
+                print(
+                    'HomeScreen: Notification bell pressed, navigating to notifications screen');
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => NotificationsScreen()),
+                  MaterialPageRoute(
+                      builder: (context) => NotificationsScreen()),
                 );
               },
             ),
             StreamBuilder<int>(
               stream: notificationService.getUnreadCount(),
               builder: (context, snapshot) {
-                print('HomeScreen: Building notification badge - Count: ${snapshot.data}');
+                print(
+                    'HomeScreen: Building notification badge - Count: ${snapshot.data}');
                 if (!snapshot.hasData || snapshot.data == 0) {
                   print('HomeScreen: No unread notifications');
                   return const SizedBox.shrink();

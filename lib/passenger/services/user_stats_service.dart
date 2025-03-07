@@ -11,24 +11,58 @@ class UserStatsService {
         return _getEmptyStats();
       }
 
-      final statsDoc = await _firestore
+      // Get user's submissions with status
+      final submissionsQuery = await _firestore
+          .collection('fares')
+          .where('submitter.uid', isEqualTo: user.uid)
+          .get();
+
+      // Calculate stats
+      int totalSubmissions = submissionsQuery.docs.length;
+      int approvedSubmissions = 0;
+      int pendingSubmissions = 0;
+      int rejectedSubmissions = 0;
+      int totalPoints = 0;
+
+      for (var doc in submissionsQuery.docs) {
+        final data = doc.data();
+        final status = data['status'] ?? 'Pending';
+
+        // Update submission counts
+        switch (status) {
+          case 'Approved':
+            approvedSubmissions++;
+            totalPoints += AppConstants.pointsPerSubmission +
+                AppConstants.bonusPointsApproved;
+            break;
+          case 'Pending':
+            pendingSubmissions++;
+            totalPoints += AppConstants.pointsPerSubmission;
+            break;
+          case 'Rejected':
+            rejectedSubmissions++;
+            break;
+        }
+      }
+
+      // Update the stats document
+      final statsRef = _firestore
           .collection('users')
           .doc(user.uid)
           .collection('statistics')
-          .doc('overview')
-          .get();
+          .doc('overview');
 
-      if (!statsDoc.exists) {
-        return _getEmptyStats();
-      }
-
-      return {
-        'points': statsDoc.data()?['points'] ?? 0,
-        'totalSubmissions': statsDoc.data()?['totalSubmissions'] ?? 0,
-        'ApprovedSubmissions': statsDoc.data()?['ApprovedSubmissions'] ?? 0,
-        'RejectedSubmissions': statsDoc.data()?['RejectedSubmissions'] ?? 0,
-        'PendingSubmissions': statsDoc.data()?['PendingSubmissions'] ?? 0,
+      final stats = {
+        'points': totalPoints,
+        'totalSubmissions': totalSubmissions,
+        'ApprovedSubmissions': approvedSubmissions,
+        'PendingSubmissions': pendingSubmissions,
+        'RejectedSubmissions': rejectedSubmissions,
+        'lastUpdated': FieldValue.serverTimestamp(),
       };
+
+      await statsRef.set(stats, SetOptions(merge: true));
+      return stats;
     } catch (e) {
       print('Error fetching user stats: $e');
       return _getEmptyStats();
@@ -129,41 +163,48 @@ class UserStatsService {
       final userRef = _firestore.collection('users').doc(userId);
 
       // Get all submissions for the user
-      final submissionsQuery = await userRef.collection('submissions').get();
+      final submissionsQuery = await _firestore
+          .collection('fares')
+          .where('submitter.uid', isEqualTo: userId)
+          .get();
 
       // Count submissions by status
       int totalSubmissions = submissionsQuery.docs.length;
-      int ApprovedSubmissions = 0;
-      int RejectedSubmissions = 0;
-      int PendingSubmissions = 0;
+      int approvedSubmissions = 0;
+      int pendingSubmissions = 0;
+      int rejectedSubmissions = 0;
+      int totalPoints = 0;
 
       for (var doc in submissionsQuery.docs) {
-        String status = doc.data()['status'] ?? 'Pending';
-        switch (status.toLowerCase()) {
+        final data = doc.data();
+        final status = data['status'] ?? 'Pending';
+
+        // Update submission counts and points
+        switch (status) {
           case 'Approved':
-            ApprovedSubmissions++;
+            approvedSubmissions++;
+            totalPoints += AppConstants.pointsPerSubmission +
+                AppConstants.bonusPointsApproved;
+            break;
+          case 'Pending':
+            pendingSubmissions++;
+            totalPoints += AppConstants.pointsPerSubmission;
             break;
           case 'Rejected':
-            RejectedSubmissions++;
+            rejectedSubmissions++;
             break;
-          default:
-            PendingSubmissions++;
         }
       }
 
-      // Calculate total points
-      int totalPoints = (totalSubmissions * AppConstants.pointsPerSubmission) +
-          (ApprovedSubmissions * AppConstants.bonusPointsApproved);
-
       // Update statistics
-      await userRef.collection('statistics').doc('overview').update({
+      await userRef.collection('statistics').doc('overview').set({
         'points': totalPoints,
         'totalSubmissions': totalSubmissions,
-        'ApprovedSubmissions': ApprovedSubmissions,
-        'RejectedSubmissions': RejectedSubmissions,
-        'PendingSubmissions': PendingSubmissions,
+        'ApprovedSubmissions': approvedSubmissions,
+        'RejectedSubmissions': rejectedSubmissions,
+        'PendingSubmissions': pendingSubmissions,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
     } catch (e) {
       print('Error refreshing user stats: $e');
       rethrow;
