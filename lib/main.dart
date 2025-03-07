@@ -15,10 +15,9 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  /// Fetch the last logged-in role from SharedPreferences.
   Future<String?> getLastLoginRole() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('last_login_role'); // Expect 'admin' or 'passenger'
+    return prefs.getString('last_login_role'); 
   }
 
   @override

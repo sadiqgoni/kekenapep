@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 import 'package:keke_fairshare/index.dart';
+import 'package:keke_fairshare/services/notification_service.dart';
 
 class FareManagementPage extends StatefulWidget {
   const FareManagementPage({super.key});
@@ -550,10 +551,16 @@ class _FareManagementPageState extends State<FareManagementPage> {
   Future<void> _updateFareStatus(String fareId, String status,
       [String? reason]) async {
     try {
+      print('FareManagement: Starting status update for fare $fareId to $status');
+      
       final fareRef =
           FirebaseFirestore.instance.collection('fares').doc(fareId);
       final fare = await fareRef.get();
       final userId = fare.data()?['submitter']?['uid'] as String?;
+      final source = fare.data()?['source'];
+      final destination = fare.data()?['destination'];
+
+      print('FareManagement: Retrieved fare data - UserId: $userId, Source: $source, Destination: $destination');
 
       // Get current admin's data
       final adminId = FirebaseAuth.instance.currentUser?.uid;
@@ -563,11 +570,14 @@ class _FareManagementPageState extends State<FareManagementPage> {
           .get();
       final adminName = adminDoc.data()?['fullName'] ?? 'Unknown Admin';
 
+      print('FareManagement: Admin info - ID: $adminId, Name: $adminName');
+
       if (userId == null) {
         throw 'User ID not found for this fare';
       }
 
       // Update both status fields and metadata with admin info
+      print('FareManagement: Updating fare status in Firestore');
       await fareRef.update({
         'status': status,
         'metadata.status': status,
@@ -585,6 +595,42 @@ class _FareManagementPageState extends State<FareManagementPage> {
         },
         if (reason != null) 'rejectionReason': reason,
       });
+      print('FareManagement: Fare status updated successfully');
+
+      // Create notification
+      print('FareManagement: Preparing notification data');
+      final notificationService = NotificationService();
+      String title;
+      String message;
+      
+      switch (status) {
+        case 'Approved':
+          title = 'Fare Approved';
+          message = 'Your fare from $source to $destination has been approved.';
+          break;
+        case 'Rejected':
+          title = 'Fare Rejected';
+          message = 'Your fare from $source to $destination was rejected.' + 
+                   (reason != null ? '\nReason: $reason' : '');
+          break;
+        case 'Flagged':
+          title = 'Fare Flagged';
+          message = 'Your fare from $source to $destination has been flagged for review.';
+          break;
+        default:
+          title = 'Fare Update';
+          message = 'Your fare from $source to $destination has been updated.';
+      }
+
+      print('FareManagement: Creating notification - Title: $title, Message: $message');
+      await notificationService.createNotification(
+        userId: userId,
+        title: title,
+        message: message,
+        type: status.toLowerCase(),
+        fareId: fareId,
+      );
+      print('FareManagement: Notification created successfully');
 
       // Update user statistics
       final userStatsRef = FirebaseFirestore.instance

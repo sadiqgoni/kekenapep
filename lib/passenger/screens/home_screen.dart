@@ -1,4 +1,6 @@
 import '../../index.dart';
+import '../screens/notifications_screen.dart';
+import '../../services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -58,6 +60,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSliverAppBar() {
+    print('HomeScreen: Building app bar with notification bell');
+    final notificationService = NotificationService();
+    
     return SliverAppBar(
       floating: true,
       pinned: true,
@@ -85,9 +90,52 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.notifications_outlined, color: Colors.black87),
-          onPressed: () {},
+        Stack(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined, color: Colors.black87),
+              onPressed: () {
+                print('HomeScreen: Notification bell pressed, navigating to notifications screen');
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => NotificationsScreen()),
+                );
+              },
+            ),
+            StreamBuilder<int>(
+              stream: notificationService.getUnreadCount(),
+              builder: (context, snapshot) {
+                print('HomeScreen: Building notification badge - Count: ${snapshot.data}');
+                if (!snapshot.hasData || snapshot.data == 0) {
+                  print('HomeScreen: No unread notifications');
+                  return const SizedBox.shrink();
+                }
+                return Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 20,
+                      minHeight: 20,
+                    ),
+                    child: Text(
+                      '${snapshot.data}',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ],
     );

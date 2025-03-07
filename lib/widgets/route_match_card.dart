@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RouteMatchCard extends StatelessWidget {
   final Map<String, dynamic> route;
@@ -38,20 +39,65 @@ class RouteMatchCard extends StatelessWidget {
                     color: Colors.green[700],
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.yellow[100],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Match: ${matchScore.round()}%',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.yellow[900],
+                Row(
+                  children: [
+                    if (route['submitterUid'] != null)
+                      FutureBuilder<DocumentSnapshot>(
+                        future: FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(route['submitterUid'])
+                            .collection('statistics')
+                            .doc('overview')
+                            .get(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData &&
+                              snapshot.data?.data() != null) {
+                            final points = (snapshot.data!.data()
+                                    as Map<String, dynamic>)['points'] ??
+                                0;
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              margin: const EdgeInsets.only(right: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[100],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.stars,
+                                      size: 12, color: Colors.blue[900]),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$points pts',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: Colors.blue[900],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.yellow[100],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Match: ${matchScore.round()}%',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.yellow[900],
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),

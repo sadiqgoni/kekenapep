@@ -119,12 +119,12 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
         // Calculate percentage match
         double matchPercentage = (matchScore / maxPossibleScore) * 100;
 
-        // Only include if there's a meaningful match
-        if (matchPercentage >= 40 && landmarkMatches >= 1) {
-          // Adjusted thresholds
+        // Only include if match percentage is >= 80% and has at least one landmark match
+        if (matchPercentage >= 80 && landmarkMatches >= 1) {
           potentialMatches.add({
             ...data,
-            'matchScore': matchPercentage, // Store as percentage
+            'matchScore': matchPercentage,
+            'submitterUid': data['submitter']?['uid'] ?? '',
           });
         }
       }
@@ -139,12 +139,46 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
 
       // Step 3: Process matches and calculate fare
       if (potentialMatches.isEmpty) {
-        throw 'No similar routes found. Try adjusting your route details.';
+        throw 'No similar routes found with sufficient match (≥80%). Try adjusting your route details.';
       }
 
-      // Sort by match score
-      potentialMatches
-          .sort((a, b) => b['matchScore'].compareTo(a['matchScore']));
+      // Get user points for each submitter
+      final submitterIds = potentialMatches
+          .map((m) => m['submitterUid'] as String)
+          .toSet()
+          .toList();
+      final userStatsSnapshots = await Future.wait(submitterIds.map((uid) =>
+          _firestore
+              .collection('users')
+              .doc(uid)
+              .collection('statistics')
+              .doc('overview')
+              .get()));
+
+      // Create map of user points
+      final userPoints = Map.fromIterables(
+          submitterIds,
+          userStatsSnapshots.map(
+              (snap) => (snap.data()?['points'] as num?)?.toDouble() ?? 0.0));
+
+      // Sort by match score and user points (weighted combination)
+      potentialMatches.sort((a, b) {
+        final scoreA = a['matchScore'] as double;
+        final scoreB = b['matchScore'] as double;
+        final pointsA = userPoints[a['submitterUid']] ?? 0.0;
+        final pointsB = userPoints[b['submitterUid']] ?? 0.0;
+
+        // Normalize points to 0-100 range for fair comparison with match score
+        final maxPoints = userPoints.values.reduce(max);
+        final normalizedPointsA = (pointsA / maxPoints) * 100;
+        final normalizedPointsB = (pointsB / maxPoints) * 100;
+
+        // Weight: 70% match score, 30% user points
+        final weightedScoreA = (scoreA * 0.7) + (normalizedPointsA * 0.3);
+        final weightedScoreB = (scoreB * 0.7) + (normalizedPointsB * 0.3);
+
+        return weightedScoreB.compareTo(weightedScoreA);
+      });
 
       // Calculate weighted average fare
       double totalWeight = 0;
