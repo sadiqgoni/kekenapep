@@ -3,6 +3,8 @@ import 'package:keke_fairshare/index.dart';
 import 'package:intl/intl.dart';
 import 'package:keke_fairshare/widgets/location_autocomplete_field.dart';
 import 'package:keke_fairshare/widgets/landmarks_selector.dart';
+import 'package:keke_fairshare/passenger/services/fare_submission_service.dart'
+    as fare_service;
 
 class SubmitFareScreen extends StatefulWidget {
   const SubmitFareScreen({super.key});
@@ -160,73 +162,147 @@ class _SubmitFareScreenState extends State<SubmitFareScreen> {
   }
 
   Future<void> _submitFare() async {
-    if (!(_formKey.currentState?.validate() ?? false)) {
-      return;
-    }
-
-    // Additional validation for required fields
-    if (_timeOfTravel == null) {
-      _showSnackBar('Please select time of travel', isError: true);
-      return;
-    }
-
-    if (_dateOfTravel == null) {
-      _showSnackBar('Please select date of travel', isError: true);
-      return;
-    }
-
-    if (_routeTaken.isEmpty) {
-      _showSnackBar('Please add at least one landmark', isError: true);
-      return;
-    }
-
-    setState(() => _isSubmitting = true);
-
-    try {
+    if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
 
-      final submission = FareSubmission(
-        source: _source!.trim(),
-        destination: _destination!.trim(),
-        fareAmount: _fareAmount!,
-        routeTaken: _routeTaken,
-        dateTime: DateTime(
-          _dateOfTravel!.year,
-          _dateOfTravel!.month,
-          _dateOfTravel!.day,
-          _timeOfTravel!.hour,
-          _timeOfTravel!.minute,
-        ),
-        weatherConditions: _weatherConditions!,
-        trafficConditions: _trafficConditions!,
-        passengerLoad: _passengerLoad!,
-        fareContext: _fareContext?.trim(),
-        rushHourStatus: _rushHourMessage,
-        userId: _auth.currentUser!.uid,
-        submittedAt: DateTime.now(),
-        status: 'Pending',
-      );
+      // Validate required fields
+      if (_source == null || _destination == null || _fareAmount == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please fill all required fields')),
+        );
+        return;
+      }
 
-      await _fareService.submitFare(submission);
+      setState(() => _isSubmitting = true);
 
-      if (!mounted) return;
-
-      _showSnackBar('✅ Fare submitted successfully!');
-
-      _formKey.currentState!.reset();
-      _clearForm();
-
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          Navigator.pop(context);
+      try {
+        // Convert Flutter's TimeOfDay to our FareTimeOfDay if available
+        fare_service.FareTimeOfDay? fareTimeOfTravel;
+        if (_timeOfTravel != null) {
+          fareTimeOfTravel = fare_service.FareTimeOfDay(
+            hour: _timeOfTravel!.hour,
+            minute: _timeOfTravel!.minute,
+          );
         }
-      });
-    } catch (e) {
-      if (!mounted) return;
-      _showSnackBar('❌ Error submitting fare: ${e.toString()}', isError: true);
-    } finally {
-      if (mounted) {
+
+        final result = await fare_service.FareSubmissionService.submitFare(
+          source: _source!,
+          destination: _destination!,
+          routeTaken: _routeTaken,
+          fareAmount: _fareAmount!.toInt(),
+          passengerLoad: _passengerLoad ?? 'Medium',
+          weatherConditions: _weatherConditions ?? 'Normal',
+          trafficConditions: _trafficConditions ?? 'Normal',
+          rushHourStatus: _rushHourMessage,
+          notes: _fareContext,
+          dateOfTravel: _dateOfTravel,
+          timeOfTravel: fareTimeOfTravel,
+        );
+
         setState(() => _isSubmitting = false);
+
+        // Show success dialog with auto-approval status
+        await showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(
+              'Submission Successful',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Thank you for your contribution!',
+                  style: GoogleFonts.poppins(),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: result['autoApproved']
+                        ? Colors.green[50]
+                        : Colors.yellow[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: result['autoApproved']
+                          ? Colors.green[300]!
+                          : Colors.yellow[300]!,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        result['autoApproved']
+                            ? Icons.check_circle
+                            : Icons.pending,
+                        color: result['autoApproved']
+                            ? Colors.green[700]
+                            : Colors.yellow[700],
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          result['autoApproved']
+                              ? 'Your submission was automatically approved!'
+                              : 'Your submission is pending review.',
+                          style: GoogleFonts.poppins(
+                            color: result['autoApproved']
+                                ? Colors.green[700]
+                                : Colors.yellow[700],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (!result['autoApproved']) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Reason: ${result['reviewReason']}',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                Text(
+                  result['autoApproved']
+                      ? 'You earned 5 points for this approved submission!'
+                      : 'You earned 2 points for this submission. You\'ll get 3 more points if approved!',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.blue[700],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  'OK',
+                  style: GoogleFonts.poppins(
+                    color: Colors.yellow[700],
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      } catch (e) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error submitting fare: $e')),
+        );
       }
     }
   }

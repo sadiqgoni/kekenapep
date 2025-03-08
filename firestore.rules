@@ -46,6 +46,18 @@ service cloud.firestore {
         allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
         allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       }
+      
+      // Route history subcollection
+      match /routeHistory/{historyId} {
+        allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      }
+      
+      // Favorite routes subcollection
+      match /favoriteRoutes/{favoriteId} {
+        allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+        allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      }
     }
     
     // Fares collection

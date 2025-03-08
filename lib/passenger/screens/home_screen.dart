@@ -1,6 +1,7 @@
 import '../../index.dart';
 import '../screens/notifications_screen.dart';
 import '../../services/notification_service.dart';
+import '../screens/route_history_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -443,12 +444,14 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         ),
         _buildAnimatedGridTile(
-          icon: Icons.account_circle,
-          label: 'Profile',
+          icon: Icons.map,
+          label: 'Your Routes',
           iconSize: iconSize,
           onTap: () {
-            Navigator.push(context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()));
+            Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const RouteHistoryScreen()));
           },
         ),
       ]),

@@ -1,6 +1,8 @@
 import 'package:intl/intl.dart';
 import 'package:keke_fairshare/index.dart';
 import 'package:keke_fairshare/services/notification_service.dart';
+import 'package:keke_fairshare/passenger/services/fare_submission_service.dart'
+    as fare_service;
 
 class FareManagementPage extends StatefulWidget {
   const FareManagementPage({super.key});
@@ -274,7 +276,23 @@ class _FareManagementPageState extends State<FareManagementPage> {
 
   Widget _buildFareSubmissionCard(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    final DateTime submittedAt = DateTime.parse(data['submittedAt']);
+
+    // Fix Timestamp handling
+    DateTime submittedAt;
+    try {
+      // Handle both Timestamp and String formats
+      if (data['submittedAt'] is Timestamp) {
+        submittedAt = (data['submittedAt'] as Timestamp).toDate();
+      } else if (data['submittedAt'] is String) {
+        submittedAt = DateTime.parse(data['submittedAt']);
+      } else {
+        submittedAt = DateTime.now(); // Fallback
+      }
+    } catch (e) {
+      print('Error parsing timestamp: $e');
+      submittedAt = DateTime.now(); // Fallback
+    }
+
     final String formattedDate =
         DateFormat('MMM d, y HH:mm').format(submittedAt);
 
@@ -395,11 +413,24 @@ class _FareManagementPageState extends State<FareManagementPage> {
             (data['routeTaken'] as List).join(' → '),
             Icons.route_outlined,
           ),
+        if (data['notes']?.isNotEmpty ?? false)
+          _buildDetailRow(
+            'Notes',
+            data['notes'],
+            Icons.info_outline,
+          ),
         if (data['fareContext']?.isNotEmpty ?? false)
           _buildDetailRow(
             'Context',
             data['fareContext'],
             Icons.info_outline,
+          ),
+        if (data['reviewReason']?.isNotEmpty ?? false)
+          _buildDetailRow(
+            'Review Reason',
+            data['reviewReason'],
+            Icons.warning_amber_outlined,
+            isWarning: true,
           ),
         if (data['rejectionReason']?.isNotEmpty ?? false)
           _buildDetailRow(
@@ -417,8 +448,13 @@ class _FareManagementPageState extends State<FareManagementPage> {
     String? value,
     IconData icon, {
     bool isRejection = false,
+    bool isWarning = false,
   }) {
     if (value == null || value.isEmpty) return const SizedBox.shrink();
+
+    Color textColor = isRejection
+        ? Colors.red
+        : (isWarning ? Colors.orange[700]! : Colors.grey[800]!);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -428,7 +464,9 @@ class _FareManagementPageState extends State<FareManagementPage> {
           Icon(
             icon,
             size: 20,
-            color: isRejection ? Colors.red : Colors.grey[600],
+            color: isRejection
+                ? Colors.red
+                : (isWarning ? Colors.orange[700] : Colors.grey[600]),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -446,7 +484,7 @@ class _FareManagementPageState extends State<FareManagementPage> {
                 Text(
                   value,
                   style: GoogleFonts.poppins(
-                    color: isRejection ? Colors.red : Colors.grey[800],
+                    color: textColor,
                   ),
                 ),
               ],
@@ -465,7 +503,7 @@ class _FareManagementPageState extends State<FareManagementPage> {
           'Approve',
           Icons.check,
           Colors.green,
-          () => _updateFareStatus(fareId, 'Approved'),
+          () => _approveFare(fareId),
           status == 'Approved',
         ),
         const SizedBox(width: 12),
@@ -548,130 +586,86 @@ class _FareManagementPageState extends State<FareManagementPage> {
     }
   }
 
-  Future<void> _updateFareStatus(String fareId, String status,
-      [String? reason]) async {
+  Future<void> _approveFare(String fareId) async {
     try {
-      print('FareManagement: Starting status update for fare $fareId to $status');
-      
-      final fareRef =
-          FirebaseFirestore.instance.collection('fares').doc(fareId);
-      final fare = await fareRef.get();
-      final userId = fare.data()?['submitter']?['uid'] as String?;
-      final source = fare.data()?['source'];
-      final destination = fare.data()?['destination'];
+      await fare_service.FareSubmissionService.approveSubmission(fareId);
 
-      print('FareManagement: Retrieved fare data - UserId: $userId, Source: $source, Destination: $destination');
-
-      // Get current admin's data
-      final adminId = FirebaseAuth.instance.currentUser?.uid;
-      final adminDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(adminId)
-          .get();
-      final adminName = adminDoc.data()?['fullName'] ?? 'Unknown Admin';
-
-      print('FareManagement: Admin info - ID: $adminId, Name: $adminName');
-
-      if (userId == null) {
-        throw 'User ID not found for this fare';
-      }
-
-      // Update both status fields and metadata with admin info
-      print('FareManagement: Updating fare status in Firestore');
-      await fareRef.update({
-        'status': status,
-        'metadata.status': status,
-        'metadata.reviewedAt': DateTime.now().toIso8601String(),
-        'metadata.reviewedBy': {
-          'id': adminId,
-          'name': adminName,
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-        'reviewedAt': DateTime.now().toIso8601String(),
-        'reviewedBy': {
-          'id': adminId,
-          'name': adminName,
-          'timestamp': DateTime.now().toIso8601String(),
-        },
-        if (reason != null) 'rejectionReason': reason,
-      });
-      print('FareManagement: Fare status updated successfully');
-
-      // Create notification
-      print('FareManagement: Preparing notification data');
-      final notificationService = NotificationService();
-      String title;
-      String message;
-      
-      switch (status) {
-        case 'Approved':
-          title = 'Fare Approved';
-          message = 'Your fare from $source to $destination has been approved.';
-          break;
-        case 'Rejected':
-          title = 'Fare Rejected';
-          message = 'Your fare from $source to $destination was rejected.' + 
-                   (reason != null ? '\nReason: $reason' : '');
-          break;
-        case 'Flagged':
-          title = 'Fare Flagged';
-          message = 'Your fare from $source to $destination has been flagged for review.';
-          break;
-        default:
-          title = 'Fare Update';
-          message = 'Your fare from $source to $destination has been updated.';
-      }
-
-      print('FareManagement: Creating notification - Title: $title, Message: $message');
-      await notificationService.createNotification(
-        userId: userId,
-        title: title,
-        message: message,
-        type: status.toLowerCase(),
-        fareId: fareId,
-      );
-      print('FareManagement: Notification created successfully');
-
-      // Update user statistics
-      final userStatsRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('statistics')
-          .doc('overview');
-
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
-        final statsDoc = await transaction.get(userStatsRef);
-        final currentStats = statsDoc.data() ?? {};
-
-        // Calculate points (only for approved submissions)
-        int pointsToAdd = status == 'Approved' ? 3 : 0;
-
-        // Update submission counts
-        final newStats = {
-          'totalSubmissions': (currentStats['totalSubmissions'] ?? 0),
-          'ApprovedSubmissions': (currentStats['ApprovedSubmissions'] ?? 0) +
-              (status == 'Approved' ? 1 : 0),
-          'PendingSubmissions': (currentStats['PendingSubmissions'] ?? 0) - 1,
-          'RejectedSubmissions': (currentStats['RejectedSubmissions'] ?? 0) +
-              (status == 'Rejected' ? 1 : 0),
-          'points': (currentStats['points'] ?? 0) + pointsToAdd,
-          'lastSubmissionAt': DateTime.now().toIso8601String(),
-          'updatedAt': DateTime.now().toIso8601String(),
-        };
-
-        transaction.set(userStatsRef, newStats, SetOptions(merge: true));
-      });
-
+      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Fare ${status.toLowerCase()} successfully'),
-          backgroundColor: status == 'Approved' ? Colors.green : Colors.red,
+          content: Text(
+            'Fare submission approved successfully',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.green,
         ),
       );
+
+      // Send notification to user
+      final fareDoc = await _firestore.collection('fares').doc(fareId).get();
+      final data = fareDoc.data();
+      if (data != null) {
+        final submitterId = data['submitter']['uid'];
+        await NotificationService().createNotification(
+          userId: submitterId,
+          title: 'Fare Submission Approved',
+          message:
+              'Your fare submission for ${data['source']} to ${data['destination']} has been approved!',
+          type: 'fare_approved',
+          fareId: fareId,
+        );
+      }
     } catch (e) {
+      print('Error approving fare: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error updating fare status: $e'),
+          content: Text(
+            'Error approving fare: $e',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _rejectFare(String fareId, String reason) async {
+    try {
+      await fare_service.FareSubmissionService.rejectSubmission(fareId, reason);
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Fare submission rejected',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+
+      // Send notification to user
+      final fareDoc = await _firestore.collection('fares').doc(fareId).get();
+      final data = fareDoc.data();
+      if (data != null) {
+        final submitterId = data['submitter']['uid'];
+        await NotificationService().createNotification(
+          userId: submitterId,
+          title: 'Fare Submission Rejected',
+          message:
+              'Your fare submission for ${data['source']} to ${data['destination']} has been rejected.',
+          type: 'fare_rejected',
+          fareId: fareId,
+        );
+      }
+    } catch (e) {
+      print('Error rejecting fare: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error rejecting fare: $e',
+            style: GoogleFonts.poppins(),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -701,9 +695,7 @@ class _FareManagementPageState extends State<FareManagementPage> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _updateFareStatus(
-                  fareId, 'Rejected', _rejectionReasonController.text);
-              // reason: _rejectionReasonController.text);
+              _rejectFare(fareId, _rejectionReasonController.text);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child:
@@ -712,5 +704,14 @@ class _FareManagementPageState extends State<FareManagementPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _updateFareStatus(String fareId, String status,
+      [String? reason]) async {
+    if (status == 'Approved') {
+      await _approveFare(fareId);
+    } else if (status == 'Rejected') {
+      await _rejectFare(fareId, reason ?? 'No reason provided');
+    }
   }
 }

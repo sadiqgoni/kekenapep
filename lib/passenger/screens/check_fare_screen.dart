@@ -4,9 +4,20 @@ import 'package:keke_fairshare/widgets/location_autocomplete_field.dart';
 import 'package:keke_fairshare/widgets/landmarks_selector.dart';
 import 'package:keke_fairshare/passenger/services/route_query_service.dart';
 import 'package:keke_fairshare/passenger/services/user_points_service.dart';
+import 'package:keke_fairshare/passenger/services/route_history_service.dart';
+import 'package:keke_fairshare/widgets/route_visualization.dart';
 
 class CheckFareScreen extends StatefulWidget {
-  const CheckFareScreen({super.key});
+  final String? initialSource;
+  final String? initialDestination;
+  final List<String>? initialLandmarks;
+
+  const CheckFareScreen({
+    super.key,
+    this.initialSource,
+    this.initialDestination,
+    this.initialLandmarks,
+  });
 
   @override
   // ignore: library_private_types_in_public_api
@@ -33,6 +44,27 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _initializeFromProps();
+  }
+
+  void _initializeFromProps() {
+    if (widget.initialSource != null) {
+      _source = widget.initialSource;
+    }
+    if (widget.initialDestination != null) {
+      _destination = widget.initialDestination;
+    }
+    if (widget.initialLandmarks != null &&
+        widget.initialLandmarks!.isNotEmpty) {
+      _landmarks.addAll(widget.initialLandmarks!);
+    }
+
+    // If we have all the required data, generate fare automatically
+    if (_source != null && _destination != null && _landmarks.length >= 2) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _generateFare();
+      });
+    }
   }
 
   @override
@@ -155,6 +187,14 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
         _matchingRoutes.take(5).toList(),
         minFare,
         maxFare,
+      );
+
+      // Save to route history
+      await RouteHistoryService.addToHistory(
+        source: _source!,
+        destination: _destination!,
+        landmarks: _landmarks,
+        estimatedFare: estimatedFare.round(),
       );
 
       _showFareResult(
@@ -290,6 +330,14 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              // Temporarily commented out route visualization
+              /* DetailedRouteVisualization(
+                source: _source!,
+                destination: _destination!,
+                landmarks: _landmarks,
+                estimatedFare: average,
+              ),
+              const SizedBox(height: 16), */
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -300,11 +348,21 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.filter_list, color: Colors.black),
-                    label: const Text('Filter',
-                        style: TextStyle(color: Colors.black)),
-                    onPressed: _showFilterDialog,
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.favorite_border),
+                        onPressed: _saveToFavorites,
+                        tooltip: 'Save to favorites',
+                      ),
+                      TextButton.icon(
+                        icon:
+                            const Icon(Icons.filter_list, color: Colors.black),
+                        label: const Text('Filter',
+                            style: TextStyle(color: Colors.black)),
+                        onPressed: _showFilterDialog,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -447,6 +505,89 @@ class _CheckFareScreenState extends State<CheckFareScreen> {
     variations.add(text.replaceAll(RegExp(r'[^\w\s]'), ''));
 
     return variations;
+  }
+
+  Future<void> _saveToFavorites() async {
+    if (_source == null || _destination == null || _landmarks.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Cannot save: route information is incomplete')),
+      );
+      return;
+    }
+
+    try {
+      final name = await _showNameDialog();
+      if (name != null) {
+        // Create a copy of landmarks to avoid any reference issues
+        final landmarksCopy = List<String>.from(_landmarks);
+
+        await RouteHistoryService.addToFavorites(
+          source: _source!,
+          destination: _destination!,
+          landmarks: landmarksCopy,
+          name: name,
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Route saved to favorites'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error saving to favorites: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving to favorites: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<String?> _showNameDialog() async {
+    final controller = TextEditingController(text: '$_source to $_destination');
+
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Save Route',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            labelText: 'Route Name',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(color: Colors.grey[700]),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.yellow[700],
+            ),
+            child: Text(
+              'Save',
+              style: GoogleFonts.poppins(color: Colors.black),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
