@@ -15,8 +15,6 @@ Browse recent submissions from other users to see how your experience compares.
 
 ## Screenshots
 
-## Screenshots
-
 Below are screenshots from the Keke FareShare mobile application:
 
 <img src="assets/images/screenshot1.jpg" alt="Screenshot 1" height="300">
@@ -24,11 +22,11 @@ Below are screenshots from the Keke FareShare mobile application:
 <img src="assets/images/screenshot3.jpg" alt="Screenshot 3" height="300">
 <img src="assets/images/screenshot4.jpg" alt="Screenshot 4" height="300">
 <img src="assets/images/screenshot5.jpg" alt="Screenshot 5" height="300">
+<img src="assets/images/screenshot8.jpg" alt="Screenshot 8" height="300">
+<img src="assets/images/screenshot10.jpg" alt="Screenshot 10" height="300">
 <img src="assets/images/screenshot6.png" alt="Screenshot 6" height="300">
 <img src="assets/images/screenshot7.png" alt="Screenshot 7" height="300">
-<img src="assets/images/screenshot8.jpg" alt="Screenshot 8" height="300">
 <img src="assets/images/screenshot9.png" alt="Screenshot 9" height="300">
-<img src="assets/images/screenshot10.jpg" alt="Screenshot 10" height="300">
 
 
 ## User & Admin Roles
