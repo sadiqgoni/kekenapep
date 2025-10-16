@@ -17,8 +17,8 @@ Browse recent submissions from other users to see how your experience compares.
 
 Below are screenshots from the Keke FareShare mobile application:
 
-![Screenshot 1](assets/images/screenshot1.jpg)
-![Screenshot 2](assets/images/screenshot2.jpg)
+<img src="assets/images/screenshot1.jpg" alt="Screenshot 1" height="400">
+<img src="assets/images/screenshot2.jpg" alt="Screenshot 2" height="400">
 ![Screenshot 3](assets/images/screenshot3.jpg)
 ![Screenshot 4](assets/images/screenshot4.jpg)
 ![Screenshot 5](assets/images/screenshot5.jpg)
