@@ -17,16 +17,16 @@ Browse recent submissions from other users to see how your experience compares.
 
 Below are screenshots from the Keke FareShare mobile application:
 
-![Screenshot 1](assets/images/screenshot1.png)
-![Screenshot 2](assets/images/screenshot2.jpeg)
-![Screenshot 3](assets/images/screenshot3.png)
-![Screenshot 4](assets/images/screenshot4.jpeg)
-![Screenshot 5](assets/images/screenshot5.png)
-![Screenshot 6](assets/images/screenshot6.jpeg)
+![Screenshot 1](assets/images/screenshot1.jpg)
+![Screenshot 2](assets/images/screenshot2.jpg)
+![Screenshot 3](assets/images/screenshot3.jpg)
+![Screenshot 4](assets/images/screenshot4.jpg)
+![Screenshot 5](assets/images/screenshot5.jpg)
+![Screenshot 6](assets/images/screenshot6.png)
 ![Screenshot 7](assets/images/screenshot7.png)
-![Screenshot 8](assets/images/screenshot8.jpeg)
+![Screenshot 8](assets/images/screenshot8.jpg)
 ![Screenshot 9](assets/images/screenshot9.png)
-![Screenshot 10](assets/images/screenshot10.jpeg)
+![Screenshot 10](assets/images/screenshot10.jpg)
 
 ## User & Admin Roles
 
