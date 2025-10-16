@@ -13,6 +13,21 @@ Submit your actual fare after each trip. Submissions are validated by an admin t
 ### Community Fare Dashboard
 Browse recent submissions from other users to see how your experience compares.
 
+## Screenshots
+
+Below are screenshots from the Keke FareShare mobile application:
+
+![Screenshot 1](assets/images/screenshot1.png)
+![Screenshot 2](assets/images/screenshot2.jpeg)
+![Screenshot 3](assets/images/screenshot3.png)
+![Screenshot 4](assets/images/screenshot4.jpeg)
+![Screenshot 5](assets/images/screenshot5.png)
+![Screenshot 6](assets/images/screenshot6.jpeg)
+![Screenshot 7](assets/images/screenshot7.png)
+![Screenshot 8](assets/images/screenshot8.jpeg)
+![Screenshot 9](assets/images/screenshot9.png)
+![Screenshot 10](assets/images/screenshot10.jpeg)
+
 ## User & Admin Roles
 
 **Passenger:** Register, submit fares, view estimates, and explore community data.
